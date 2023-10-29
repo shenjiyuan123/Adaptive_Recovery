@@ -58,7 +58,7 @@ class Arguments():
                                 #If this parameter is set to False, only the global model after the final training is completed is output
         self.if_retrain = False#If set to True, the global model is retrained using the FL-Retrain function, and data corresponding to the user for the forget_client_IDx number is discarded.
         
-        self.if_unlearning = False#If set to False, the global_train_once function will not skip users that need to be forgotten;If set to True, global_train_once skips the forgotten user during training
+        self.if_unlearning = False#If set to False, the global_train_once function will not skip users that need to be forgotten; If set to True, global_train_once skips the forgotten user during training
         
         self.forget_local_epoch_ratio = 0.5 #When a user is selected to be forgotten, other users need to train several rounds of on-line training in their respective data sets to obtain the general direction of model convergence in order to provide the general direction of model convergence.
                                             #forget_local_epoch_ratio*local_epoch Is the number of rounds of local training when we need to get the convergence direction of each local model
@@ -96,7 +96,7 @@ def Federated_Unlearning():
     print(60*'=')
     print("Step3. Fedearated Learning and Unlearning Training...")
     # 
-    old_GMs, unlearn_GMs, uncali_unlearn_GMs = federated_learning_unlearning(init_global_model, 
+    old_GMs, unlearn_GMs, uncali_unlearn_GMs, old_CMs = federated_learning_unlearning(init_global_model, 
                                                                                             client_loaders, 
                                                                                             test_loader, 
                                                                                             FL_params)
