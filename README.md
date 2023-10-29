@@ -44,13 +44,13 @@ Gradient-Leaks
 ```
 There are several parts of the code:
 - datasets folder: This folder contains the training and testing data for the target model.  In order to reduce the memory space, we just list the  links to theset dataset here. 
-   -- Adult: https://archive.ics.uci.edu/ml/datasets/Adult
-   -- Bank: https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
-   -- Purchase: https://github.com/privacytrustlab/datasets/blob/master/dataset_purchase.tgz
-   -- MNIST: http://yann.lecun.com/exdb/mnist/
+   - Adult: https://archive.ics.uci.edu/ml/datasets/Adult
+   - Bank: https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
+   - Purchase: https://github.com/privacytrustlab/datasets/blob/master/dataset_purchase.tgz
+   - MNIST: http://yann.lecun.com/exdb/mnist/
 - data_preprocessing.py: This file contains the preprocessing of the raw data in datasets folder.
-- Fed_Unlearn_base.py: This file contains the base function of FedEraser, which corresponds to **Section III** in our paper.
-- ***Fed_Unlearn_main.py: The main function of Gradient-Leaks.***
+- Fed_Unlearn_base.py: This file contains the base function of FedEraser, which corresponds to Section III in our paper.
+- Fed_Unlearn_main.py: The main function of Gradient-Leaks.
 - FL_base.py: This file contains the function of Federated Learning, such as FedAvg, Local-Training. 
 - membership_inference.py: This file contains the training process of the membership feature extraction model and the  attack model. 
 - model_initiation.py: This file contains the structure of the global model corresponding to each dataset that we used in our experiment.  
@@ -58,6 +58,7 @@ There are several parts of the code:
 ## Parameter Setting of FedEraser
 The attack settings of Gradient-Leaks are determined in the parameter **FL_params** in **Fed_Unlearn_main.py**. 
 - ***Federated Learning Model Training Settings***
+```
 -- FL_params.N_total_client: the number of federated clients 
 -- FL_params.N_client: 
 -- FL_params.data_name: select the dataset 
@@ -71,15 +72,20 @@ The attack settings of Gradient-Leaks are determined in the parameter **FL_param
 -- FL_params.cuda_state: check whether gpu is available (torch.cuda.is_available())
 -- FL_params.use_gpu: controlling whether to use gpu 
 -- FL_params.train_with_test: controlling whether testings are performed at the end of each global round of training
-
+```
 
 - ***Federated Unlearning Settings***
+```
 -- FL_params.unlearn_interval: Used to control how many rounds the model parameters are saved. $1$ represents the parameter saved once per round. (corresponding to N_itv in our paper)
-	-- FL_params.forget_local_epoch_ratio: When a user is selected to be forgotten, other users need to train several rounds of on-line training in their respective data sets to obtain the general direction of model convergence in order to provide the general direction of model convergence. $forget_local_epoch_ratio \times local_epoch is$ the number of rounds of local training when we need to get the convergence direction of each local model
--- FL_params.forget_client_idx = 2 #If want to forget, change None to the client index                 
--- FL_params.if_retrain: If set to True, the global model is retrained using the FL-Retrain function, and data corresponding to the user for the forget_client_IDx number is discarded. If this parameter is set to False, only the global model after the final training is completed is output
--- FL_params.if_unlearning: If set to False, the global_train_once function will not skip users that need to be forgotten;If set to True, global_train_once skips the forgotten user during training
 
+-- FL_params.forget_local_epoch_ratio: When a user is selected to be forgotten, other users need to train several rounds of on-line training in their respective data sets to obtain the general direction of model convergence in order to provide the general direction of model convergence. $forget_local_epoch_ratio \times local_epoch is$ the number of rounds of local training when we need to get the convergence direction of each local model
+
+-- FL_params.forget_client_idx = 2 #If want to forget, change None to the client index  
+
+-- FL_params.if_retrain: If set to True, the global model is retrained using the FL-Retrain function, and data corresponding to the user for the forget_client_IDx number is discarded. If this parameter is set to False, only the global model after the final training is completed is output
+
+-- FL_params.if_unlearning: If set to False, the global_train_once function will not skip users that need to be forgotten;If set to True, global_train_once skips the forgotten user during training
+```
 
 
 ## Execute Gradient-Leaks
