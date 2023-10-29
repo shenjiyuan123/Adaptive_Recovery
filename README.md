@@ -83,7 +83,7 @@ The attack settings of Gradient-Leaks are determined in the parameter **FL_param
 
 
 ## Execute Gradient-Leaks
-*** Run Fed_Unlearn_main.py.  ***
+ Run Fed_Unlearn_main.py. 
 
 
 
