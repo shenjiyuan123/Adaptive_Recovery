@@ -1,4 +1,4 @@
-# Adaptive FedEraser (Federated Unlearning)
+# Crab: Towards Efficient and Certified Recovery from Poisoning Attacks in Federated Learning
 ## About The Project
 FedEraser allows a federated client to quit the Federated Learning system and eliminate the influences of his or her data on the global model trained by the standard Federated Learning. 
 

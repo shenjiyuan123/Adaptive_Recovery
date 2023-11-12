@@ -429,6 +429,7 @@ class FedAvg(Server):
 
         self.save_results()
         self.save_global_model()
+        self.FL_global_model = copy.deepcopy(self.global_model)
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
@@ -480,8 +481,11 @@ class FedAvg(Server):
             
             # 开始校准
             self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
-            
+        
+        print(f"\n-------------After FedEraser-------------")
+        print("\nEvaluate Eraser globel model")
         self.evaluate()
+        self.eraser_global_model = copy.deepcopy(self.global_model)
             
     
     def unlearning_step_once(self, old_client_models, new_client_models, global_model_before_forget, global_model_after_forget):
@@ -577,6 +581,7 @@ class FedAvg(Server):
 
         self.save_results()
         self.save_global_model()
+        self.retrain_global_model = copy.deepcopy(self.global_model)
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
@@ -584,6 +589,169 @@ class FedAvg(Server):
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
+            
+            
+    def MIA_metrics(self):
+        attacker = self.build_MIA_attacker()
+        print("\n-------------MIA evaluation against Standard FL-------------")
+        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
+        
+        print("\n-------------MIA evaluation against FL Unlearn-------------")
+        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
+        
+        print("\n-------------MIA evaluation against FL Retrain-------------")
+        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.retrain_global_model)
+        
+        
+    def build_MIA_attacker(self):
+        from torch.nn.functional import softmax
+        from xgboost import XGBClassifier
+        from sklearn.model_selection import train_test_split
+        
+        shadow_model = self.FL_global_model
+        n_class_dict = dict()
+        n_class_dict['mnist'] = 10
+        n_class_dict['cifar10'] = 10
+        
+        N_class = n_class_dict[self.dataset]
+        
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        shadow_model.to(device)
+            
+        shadow_model.eval()
+        
+        # 得到使用的dataset的 [logits, 1]
+        pred_4_mem = torch.zeros([1,N_class])
+        pred_4_mem = pred_4_mem.to(device)
+        with torch.no_grad():
+            for ii in range(len(self.clients)):
+                data_loader = self.clients[ii].load_train_data()
+                
+                for batch_idx, (data, target) in enumerate(data_loader):
+                        data = data.to(device)
+                        out = shadow_model(data)
+                        pred_4_mem = torch.cat([pred_4_mem, out])
+        pred_4_mem = pred_4_mem[1:,:]
+        pred_4_mem = softmax(pred_4_mem,dim = 1)
+        pred_4_mem = pred_4_mem.cpu()
+        pred_4_mem = pred_4_mem.detach().numpy()
+        
+        # 得到未使用的dataset的 [logits, 0]
+        pred_4_nonmem = torch.zeros([1,N_class])
+        pred_4_nonmem = pred_4_nonmem.to(device)
+        with torch.no_grad():
+            for ii in range(len(self.clients)):
+                data_loader = self.clients[ii].load_test_data()
+                for batch, (data, target) in enumerate(data_loader):
+                    data = data.to(device)
+                    out = shadow_model(data)
+                    pred_4_nonmem = torch.cat([pred_4_nonmem, out])
+        pred_4_nonmem = pred_4_nonmem[1:,:]
+        pred_4_nonmem = softmax(pred_4_nonmem,dim = 1)
+        pred_4_nonmem = pred_4_nonmem.cpu()
+        pred_4_nonmem = pred_4_nonmem.detach().numpy()
+        
+        
+        #构建MIA 攻击模型 
+        att_y = np.hstack((np.ones(pred_4_mem.shape[0]), np.zeros(pred_4_nonmem.shape[0])))
+        att_y = att_y.astype(np.int16)
+        
+        att_X = np.vstack((pred_4_mem, pred_4_nonmem))
+        att_X.sort(axis=1)
+        
+        X_train,X_test, y_train, y_test = train_test_split(att_X, att_y, test_size = 0.1)
+        
+        attacker = XGBClassifier(n_estimators = 300,
+                                n_jobs = -1,
+                                    max_depth = 30,
+                                objective = 'binary:logistic',
+                                booster="gbtree",
+                                # learning_rate=None,
+                                # tree_method = 'gpu_hist',
+                                scale_pos_weight = pred_4_nonmem.shape[0]/pred_4_mem.shape[0]
+                                )
+        
+        attacker.fit(X_train, y_train)
+        
+        return attacker
         
     
+    def MIA_attack(self, attacker, target_model):
+        """使用在正常 FL 过程得到的 Global model, 测试遗忘程度
+
+        Args:
+            attacker (class): xgbboost 分类器
+            target_model (nn.model): after unlearned global model
+
+        Returns:
+            (pre, rec)
+        """
+        from torch.nn.functional import softmax
+        from sklearn.metrics import accuracy_score, precision_score, recall_score
+        
+        n_class_dict = dict()
+        n_class_dict['mnist'] = 10
+        n_class_dict['cifar10'] = 10
+        
+        N_class = n_class_dict[self.dataset]
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        target_model.eval()
+        
+        # 得到需要unlearn的client的 [logits, 1]
+        unlearn_X = torch.zeros([1,N_class])
+        unlearn_X = unlearn_X.to(device)
+        with torch.no_grad():
+            for ii in range(len(self.unlearn_clients)):
+                data_loader = self.clients[ii].load_train_data()
+                for batch, (data, target) in enumerate(data_loader):
+                    data = data.to(device)
+                    out = target_model(data)
+                    unlearn_X = torch.cat([unlearn_X, out])
+                        
+        unlearn_X = unlearn_X[1:,:]
+        unlearn_X = softmax(unlearn_X,dim = 1)
+        unlearn_X = unlearn_X.cpu().detach().numpy()
+        
+        unlearn_X.sort(axis=1)
+        unlearn_y = np.ones(unlearn_X.shape[0])
+        unlearn_y = unlearn_y.astype(np.int16)
+        
+        N_unlearn_sample = len(unlearn_y)
+        
+        # 得到test的数据，标记为 [logits, 0]
+        test_X = torch.zeros([1, N_class])
+        test_X = test_X.to(device)
+        with torch.no_grad():
+            for ii in range(len(self.clients)):
+                data_loader = self.clients[ii].load_test_data()
+                for _, (data, target) in enumerate(data_loader):
+                    data = data.to(device)
+                    out = target_model(data)
+                    test_X = torch.cat([test_X, out])
+                
+                    if(test_X.shape[0] > N_unlearn_sample):
+                        break
+                    
+        test_X = test_X[1:N_unlearn_sample+1,:]
+        test_X = softmax(test_X,dim = 1)
+        test_X = test_X.cpu().detach().numpy()
+        
+        test_X.sort(axis=1)
+        test_y = np.zeros(test_X.shape[0])
+        test_y = test_y.astype(np.int16)
+        
+        # 理想状态应该是: unlearn的为全错，test的为全对
+        XX = np.vstack((unlearn_X, test_X))
+        YY = np.hstack((unlearn_y, test_y))
+        
+        pred_YY = attacker.predict(XX)
+        # acc = accuracy_score( YY, pred_YY)
+        pre = precision_score(YY, pred_YY, pos_label=1)
+        rec = recall_score(YY, pred_YY, pos_label=1)
+        # print("MIA Attacker accuracy = {:.4f}".format(acc))
+        print("MIA Attacker precision = {:.4f}".format(pre))
+        print("MIA Attacker recall = {:.4f}".format(rec))
+        
+        return (pre, rec)
     
