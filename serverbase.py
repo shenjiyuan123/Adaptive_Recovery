@@ -485,7 +485,7 @@ class FedAvg(Server):
         print(f"\n-------------After FedEraser-------------")
         print("\nEvaluate Eraser globel model")
         self.evaluate()
-        self.eraser_global_model = copy.deepcopy(self.global_model)
+        self.eraser_global_model = copy.deepcopy(self.new_GM)
             
     
     def unlearning_step_once(self, old_client_models, new_client_models, global_model_before_forget, global_model_after_forget):
