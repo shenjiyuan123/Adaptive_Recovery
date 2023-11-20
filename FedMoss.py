@@ -25,7 +25,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
 
 warnings.simplefilter("ignore")
-torch.manual_seed(0)
+# torch.manual_seed(0)
 
 # hyper-params for Text tasks
 vocab_size = 98635
@@ -126,7 +126,8 @@ def run(args):
         server.train()
         
         if True:
-            server.unlearning()
+            server.select_unlearned_clients()
+            # server.unlearning()
 
             server.retrain()
             
@@ -154,12 +155,12 @@ if __name__ == "__main__":
     parser.add_argument('-data', "--dataset", type=str, default="mnist")
     parser.add_argument('-nb', "--num_classes", type=int, default=10)
     parser.add_argument('-m', "--model", type=str, default="cnn")
-    parser.add_argument('-lbs', "--batch_size", type=int, default=10)
+    parser.add_argument('-lbs', "--batch_size", type=int, default=64)
     parser.add_argument('-lr', "--local_learning_rate", type=float, default=0.005,
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=5)
+    parser.add_argument('-gr', "--global_rounds", type=int, default=1)
     parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
                         help="Multiple update steps in one local epoch.")
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
@@ -167,7 +168,7 @@ if __name__ == "__main__":
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument('-nc', "--num_clients", type=int, default=4,
+    parser.add_argument('-nc', "--num_clients", type=int, default=10,
                         help="Total number of clients")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")

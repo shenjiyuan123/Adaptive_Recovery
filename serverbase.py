@@ -112,6 +112,17 @@ class Server(object):
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
             
+    def send_retrained_models(self):
+        assert (len(self.clients) > 0)
+
+        for client in self.remaining_clients:
+            start_time = time.time()
+            
+            client.set_parameters(self.global_model)
+
+            client.send_time_cost['num_rounds'] += 1
+            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+            
     def send_specific_models(self, global_model):
         assert (len(self.clients) > 0)
 
@@ -129,6 +140,27 @@ class Server(object):
         self.uploaded_models = []
         tot_samples = 0
         for client in active_clients:
+            try:
+                client_time_cost = client.train_time_cost['total_cost'] / client.train_time_cost['num_rounds'] + \
+                        client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
+            except ZeroDivisionError:
+                client_time_cost = 0
+            if client_time_cost <= self.time_threthold:
+                tot_samples += client.train_samples
+                self.uploaded_ids.append(client.id)
+                self.uploaded_weights.append(client.train_samples)
+                self.uploaded_models.append(client.model)
+        for i, w in enumerate(self.uploaded_weights):
+            self.uploaded_weights[i] = w / tot_samples
+            
+    def receive_retrained_models(self, remaining_clients):
+        assert (len(remaining_clients) > 0)
+
+        self.uploaded_ids = []
+        self.uploaded_weights = []
+        self.uploaded_models = []
+        tot_samples = 0
+        for client in remaining_clients:
             try:
                 client_time_cost = client.train_time_cost['total_cost'] / client.train_time_cost['num_rounds'] + \
                         client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
@@ -228,6 +260,14 @@ class Server(object):
 
     def load_item(self, item_name):
         return torch.load(os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
+    
+    def read_all_testset(self):
+        from dataset_utils import read_all_test_data
+        import os
+        from torch.utils.data import DataLoader
+        range_idx = len(os.listdir("data/mnist/test"))
+        test_data = read_all_test_data(self.dataset, range_idx)
+        return DataLoader(test_data, 64, drop_last=False, shuffle=True)
 
     def test_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -398,7 +438,7 @@ class FedAvg(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
-
+            print(self.selected_clients)
             for client in self.selected_clients:
                 client.train()
 
@@ -439,13 +479,22 @@ class FedAvg(Server):
             self.evaluate()
             
             
-    def unlearning(self):
+    def select_unlearned_clients(self):
+        self.selected_clients = self.select_clients()
         idx = [i for i in range(self.num_clients)]
         idx_ = random.sample(range(len(idx)), self.unlearn_clients_number)
-        idr_ = [i for i in range(self.num_clients) if i not in idx_]
+        idx_ = [9]
+        # idr_ = [i for i in range(self.num_clients) if i not in idx_]
+        idr_ = [0,1,2,3,4,5,6,7,8]
         self.unlearn_clients = [self.selected_clients[i] for i in idx_]
         self.remaining_clients = [self.selected_clients[i] for i in idr_]
         
+        
+    # TODO: unlearning algorithm 存错了
+    def unlearning(self):
+        idx_ = [9]
+        idr_ = [0,1,2,3,4,5,6,7,8]
+        print("***************", self.unlearn_clients)
         
         for epoch in range(self.global_rounds + 1):
             self.load_model(epoch)
@@ -546,20 +595,21 @@ class FedAvg(Server):
     def retrain(self):
         self.current_num_join_clients = len(self.remaining_clients)
         self.global_model = copy.deepcopy(self.args.model)
+
         for i in range(self.global_rounds+1):
             s_t = time.time()
-            self.selected_clients = self.remaining_clients
-            self.send_models()
+            # self.send_models()
+            self.send_retrained_models()
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
-
-            for client in self.selected_clients:
+            print(self.remaining_clients)
+            for client in self.remaining_clients:
                 client.train()
 
-            self.receive_models()
+            self.receive_retrained_models(self.remaining_clients)
             # self.save_client_model(i)
             if self.dlg_eval and i%self.dlg_gap == 0:
                 self.call_dlg(i)
@@ -592,12 +642,17 @@ class FedAvg(Server):
             
             
     def MIA_metrics(self):
+        # self.FL_global_model = torch.load('models/10_2/FedAvg_server.pt')
+        # self.retrain_global_model = torch.load('models/9_2/FedAvg_server.pt')
+        
+        print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.retrain_global_model.state_dict()['base.conv1.0.weight'][-1])
+        
         attacker = self.build_MIA_attacker()
         print("\n-------------MIA evaluation against Standard FL-------------")
         (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
         
         print("\n-------------MIA evaluation against FL Unlearn-------------")
-        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
+        # (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
         
         print("\n-------------MIA evaluation against FL Retrain-------------")
         (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.retrain_global_model)
@@ -607,6 +662,7 @@ class FedAvg(Server):
         from torch.nn.functional import softmax
         from xgboost import XGBClassifier
         from sklearn.model_selection import train_test_split
+        from sklearn.metrics import accuracy_score, precision_score, recall_score
         
         shadow_model = self.FL_global_model
         n_class_dict = dict()
@@ -623,29 +679,33 @@ class FedAvg(Server):
         # 得到使用的dataset的 [logits, 1]
         pred_4_mem = torch.zeros([1,N_class])
         pred_4_mem = pred_4_mem.to(device)
+        print("self selected clients", len(self.selected_clients))
         with torch.no_grad():
-            for ii in range(len(self.clients)):
-                data_loader = self.clients[ii].load_train_data()
-                
+            for ii in range(4, len(self.selected_clients)):
+                data_loader = self.selected_clients[ii].load_train_data()
                 for batch_idx, (data, target) in enumerate(data_loader):
-                        data = data.to(device)
-                        out = shadow_model(data)
-                        pred_4_mem = torch.cat([pred_4_mem, out])
+                    data = data.to(device)
+                    out = shadow_model(data)
+                    pred_4_mem = torch.cat([pred_4_mem, out])
         pred_4_mem = pred_4_mem[1:,:]
         pred_4_mem = softmax(pred_4_mem,dim = 1)
         pred_4_mem = pred_4_mem.cpu()
         pred_4_mem = pred_4_mem.detach().numpy()
         
         # 得到未使用的dataset的 [logits, 0]
+        import torchvision
+        import torchvision.transforms as transforms
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
+        testset = torchvision.datasets.MNIST(root="FedEraser-Code/data/mnist/rawdata", train=False, download=False, transform=transform)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=len(testset.data), shuffle=False)
+        
         pred_4_nonmem = torch.zeros([1,N_class])
         pred_4_nonmem = pred_4_nonmem.to(device)
         with torch.no_grad():
-            for ii in range(len(self.clients)):
-                data_loader = self.clients[ii].load_test_data()
-                for batch, (data, target) in enumerate(data_loader):
-                    data = data.to(device)
-                    out = shadow_model(data)
-                    pred_4_nonmem = torch.cat([pred_4_nonmem, out])
+            for batch, (data, target) in enumerate(testloader):
+                data = data.to(device)
+                out = shadow_model(data)
+                pred_4_nonmem = torch.cat([pred_4_nonmem, out])
         pred_4_nonmem = pred_4_nonmem[1:,:]
         pred_4_nonmem = softmax(pred_4_nonmem,dim = 1)
         pred_4_nonmem = pred_4_nonmem.cpu()
@@ -657,13 +717,14 @@ class FedAvg(Server):
         att_y = att_y.astype(np.int16)
         
         att_X = np.vstack((pred_4_mem, pred_4_nonmem))
-        att_X.sort(axis=1)
+        # att_X.sort(axis=1)
         
-        X_train,X_test, y_train, y_test = train_test_split(att_X, att_y, test_size = 0.1)
+        X_train, X_test, y_train, y_test = train_test_split(att_X, att_y, test_size = 0.1)
+        print(pred_4_mem.shape[0], pred_4_nonmem.shape[0])
         
         attacker = XGBClassifier(n_estimators = 300,
                                 n_jobs = -1,
-                                    max_depth = 30,
+                                max_depth = 30,
                                 objective = 'binary:logistic',
                                 booster="gbtree",
                                 # learning_rate=None,
@@ -672,6 +733,14 @@ class FedAvg(Server):
                                 )
         
         attacker.fit(X_train, y_train)
+        pred_YY = attacker.predict(X_test)
+        acc = accuracy_score(y_test, pred_YY)
+        pre = precision_score(y_test, pred_YY, pos_label=1)
+        rec = recall_score(y_test, pred_YY, pos_label=1)
+        print("\n-------------Test Membership Inference Capcity-------------")
+        pred = attacker.predict(X_train)
+        print("Test MIA Attacker train accuracy = {:.4f}".format(accuracy_score(y_train, pred)))
+        print("Test MIA Attacker test accuracy = {:.4f}".format(acc))
         
         return attacker
         
@@ -701,9 +770,10 @@ class FedAvg(Server):
         # 得到需要unlearn的client的 [logits, 1]
         unlearn_X = torch.zeros([1,N_class])
         unlearn_X = unlearn_X.to(device)
+        print(len(self.unlearn_clients))
         with torch.no_grad():
             for ii in range(len(self.unlearn_clients)):
-                data_loader = self.clients[ii].load_train_data()
+                data_loader = self.unlearn_clients[ii].load_train_data()
                 for batch, (data, target) in enumerate(data_loader):
                     data = data.to(device)
                     out = target_model(data)
@@ -713,43 +783,43 @@ class FedAvg(Server):
         unlearn_X = softmax(unlearn_X,dim = 1)
         unlearn_X = unlearn_X.cpu().detach().numpy()
         
-        unlearn_X.sort(axis=1)
+        # unlearn_X.sort(axis=1)
         unlearn_y = np.ones(unlearn_X.shape[0])
         unlearn_y = unlearn_y.astype(np.int16)
         
         N_unlearn_sample = len(unlearn_y)
         
         # 得到test的数据，标记为 [logits, 0]
-        test_X = torch.zeros([1, N_class])
-        test_X = test_X.to(device)
-        with torch.no_grad():
-            for ii in range(len(self.clients)):
-                data_loader = self.clients[ii].load_test_data()
-                for _, (data, target) in enumerate(data_loader):
-                    data = data.to(device)
-                    out = target_model(data)
-                    test_X = torch.cat([test_X, out])
+        # test_X = torch.zeros([1, N_class])
+        # test_X = test_X.to(device)
+        # with torch.no_grad():
+        #     for ii in range(len(self.clients)):
+        #         data_loader = self.clients[ii].load_test_data()
+        #         for _, (data, target) in enumerate(data_loader):
+        #             data = data.to(device)
+        #             out = target_model(data)
+        #             test_X = torch.cat([test_X, out])
                 
-                    if(test_X.shape[0] > N_unlearn_sample):
-                        break
+        #             if(test_X.shape[0] > N_unlearn_sample):
+        #                 break
                     
-        test_X = test_X[1:N_unlearn_sample+1,:]
-        test_X = softmax(test_X,dim = 1)
-        test_X = test_X.cpu().detach().numpy()
+        # test_X = test_X[1:N_unlearn_sample+1,:]
+        # test_X = softmax(test_X,dim = 1)
+        # test_X = test_X.cpu().detach().numpy()
         
-        test_X.sort(axis=1)
-        test_y = np.zeros(test_X.shape[0])
-        test_y = test_y.astype(np.int16)
+        # test_X.sort(axis=1)
+        # test_y = np.zeros(test_X.shape[0])
+        # test_y = test_y.astype(np.int16)
         
         # 理想状态应该是: unlearn的为全错，test的为全对
-        XX = np.vstack((unlearn_X, test_X))
-        YY = np.hstack((unlearn_y, test_y))
+        XX = np.vstack((unlearn_X))
+        YY = np.hstack((unlearn_y))
         
         pred_YY = attacker.predict(XX)
-        # acc = accuracy_score( YY, pred_YY)
+        acc = accuracy_score(YY, pred_YY)
         pre = precision_score(YY, pred_YY, pos_label=1)
         rec = recall_score(YY, pred_YY, pos_label=1)
-        # print("MIA Attacker accuracy = {:.4f}".format(acc))
+        print("MIA Attacker accuracy = {:.4f}".format(acc))
         print("MIA Attacker precision = {:.4f}".format(pre))
         print("MIA Attacker recall = {:.4f}".format(rec))
         
