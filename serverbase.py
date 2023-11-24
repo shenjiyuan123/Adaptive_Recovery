@@ -5,6 +5,7 @@ import h5py
 import copy
 import time
 import random
+from pprint import pprint
 
 from dataset_utils import read_client_data
 from clientbase import clientAVG
@@ -22,6 +23,8 @@ class Server(object):
         self.local_epochs = args.local_epochs
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
+        self.initial_model = copy.deepcopy(args.model)
+        print("initial:", self.initial_model.state_dict()['base.conv1.0.weight'][0])
         self.global_model = copy.deepcopy(args.model)
         self.num_clients = args.num_clients
         self.join_ratio = args.join_ratio
@@ -112,22 +115,6 @@ class Server(object):
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
             
-    def send_retrained_models(self):
-        assert (len(self.clients) > 0)
-
-        for client in self.remaining_clients:
-            start_time = time.time()
-            
-            client.set_parameters(self.global_model)
-
-            client.send_time_cost['num_rounds'] += 1
-            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
-            
-    def send_specific_models(self, global_model):
-        assert (len(self.clients) > 0)
-
-        for client in self.clients:
-            client.set_parameters(global_model)
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
@@ -173,6 +160,8 @@ class Server(object):
                 self.uploaded_models.append(client.model)
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
+        
+        print(self.uploaded_ids, len(remaining_clients), len(self.uploaded_models))
             
 
     def aggregate_parameters(self):
@@ -189,51 +178,47 @@ class Server(object):
     def add_parameters(self, w, client_model):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
-
-    def save_global_model(self):
-        model_path = os.path.join("models", self.dataset)
-        if not os.path.exists(model_path):
-            os.makedirs(model_path)
-        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
-        torch.save(self.global_model, model_path)
         
-    def save_each_round_global_model(self, epoch):
-        model_path = os.path.join("models", self.dataset)
-        if not os.path.exists(model_path):
-            os.makedirs(model_path)
-        model_path = os.path.join(model_path, self.algorithm + "_server_" + str(epoch) + ".pt")
-        torch.save(self.global_model, model_path)
-        
+            
     def save_client_model(self, epoch):
-        model_path = os.path.join("client_models", self.dataset)
+        model_path = os.path.join("clients_models", self.dataset)
         if not os.path.exists(model_path):
             os.makedirs(model_path)
         model_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
-        torch.save(self.uploaded_models, model_path)
+        torch.save(self.selected_clients, model_path)
 
-    def load_model(self, epoch):
-        if epoch == self.global_rounds:
-            model_path = os.path.join("models", self.dataset)
-            model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
-            assert (os.path.exists(model_path))
-            self.global_model = torch.load(model_path)
-        else:
-            model_path = os.path.join("models", self.dataset)
-            model_path = os.path.join(model_path, self.algorithm + "_server_" + str(epoch) + ".pt")
-            assert (os.path.exists(model_path))
-            self.global_model = torch.load(model_path)
-            
-    
     def load_client_model(self, epoch):
-        model_path = os.path.join("client_models", self.dataset)
+        model_path = os.path.join("clients_models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
         assert (os.path.exists(model_path))
         client_models = torch.load(model_path)
         assert (len(client_models) == self.num_clients)
         return client_models
 
+
+    def save_global_model(self):
+        model_path = os.path.join("server_models", self.dataset)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+        torch.save(self.global_model, model_path)
+        
+    def save_each_round_global_model(self, epoch):
+        model_path = os.path.join("server_models", self.dataset)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        model_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
+        torch.save(self.global_model, model_path)
+
+    def load_model(self):
+        model_path = os.path.join("server_models", self.dataset)
+        model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
+        assert (os.path.exists(model_path))
+        self.global_model = torch.load(model_path)
+            
+
     def model_exists(self):
-        model_path = os.path.join("models", self.dataset)
+        model_path = os.path.join("server_models", self.dataset)
         model_path = os.path.join(model_path, self.algorithm + "_server" + ".pt")
         return os.path.exists(model_path)
         
@@ -261,13 +246,61 @@ class Server(object):
     def load_item(self, item_name):
         return torch.load(os.path.join(self.save_folder_name, "server_" + item_name + ".pt"))
     
+    
     def read_all_testset(self):
+        raise NotImplementedError
         from dataset_utils import read_all_test_data
         import os
         from torch.utils.data import DataLoader
         range_idx = len(os.listdir("data/mnist/test"))
         test_data = read_all_test_data(self.dataset, range_idx)
         return DataLoader(test_data, 64, drop_last=False, shuffle=True)
+
+    def server_metrics(self):
+        import dataset_utils
+        from torch.utils.data import DataLoader
+        from sklearn.preprocessing import label_binarize
+        from sklearn import metrics
+        testdata = dataset_utils.read_all_test_data(self.dataset, 50)
+        testloader = DataLoader(testdata, self.batch_size, drop_last=False, shuffle=True)
+        self.global_model.eval()
+
+        test_acc = 0
+        test_num = 0
+        y_prob = []
+        y_true = []
+        
+        with torch.no_grad():
+            for x, y in testloader:
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+                output = self.global_model(x)
+
+                test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                test_num += y.shape[0]
+
+                y_prob.append(output.detach().cpu().numpy())
+                nc = self.num_classes
+                if self.num_classes == 2:
+                    nc += 1
+                lb = label_binarize(y.detach().cpu().numpy(), classes=np.arange(nc))
+                if self.num_classes == 2:
+                    lb = lb[:, :2]
+                y_true.append(lb)
+
+        # self.model.cpu()
+        # self.save_model(self.model, 'model')
+        acc = test_acc / test_num
+        y_prob = np.concatenate(y_prob, axis=0)
+        y_true = np.concatenate(y_true, axis=0)
+
+        auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
+        print("Average Test Accurancy: {:.4f}".format(acc))
+        print("Average Test AUC: {:.4f}".format(auc))
+        return acc, auc
 
     def test_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -429,6 +462,7 @@ class FedAvg(Server):
 
 
     def train(self):
+        print(self.global_model.state_dict()['base.conv1.0.weight'][0])
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -468,7 +502,8 @@ class FedAvg(Server):
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
         self.save_results()
-        self.save_global_model()
+        # self.save_global_model()
+        self.server_metrics()
         self.FL_global_model = copy.deepcopy(self.global_model)
 
         if self.num_new_clients > 0:
@@ -481,59 +516,78 @@ class FedAvg(Server):
             
     def select_unlearned_clients(self):
         self.selected_clients = self.select_clients()
-        idx = [i for i in range(self.num_clients)]
-        idx_ = random.sample(range(len(idx)), self.unlearn_clients_number)
-        idx_ = [9]
-        # idr_ = [i for i in range(self.num_clients) if i not in idx_]
-        idr_ = [0,1,2,3,4,5,6,7,8]
-        self.unlearn_clients = [self.selected_clients[i] for i in idx_]
-        self.remaining_clients = [self.selected_clients[i] for i in idr_]
+        print(self.selected_clients)
+        
+        id_selected_clients = [c.id for c in self.selected_clients] 
+        
+        idx_ = random.sample(id_selected_clients, self.unlearn_clients_number)
+        # idx_ = [9]
+        idr_ = [i for i in id_selected_clients if i not in idx_]
+        # idr_ = [0,1,2,3,4,5,6,7,8]
+        self.unlearn_clients = [c for c in self.selected_clients if c.id in idx_]
+        self.remaining_clients = [c for c in self.selected_clients if c.id in idr_]
+        print(self.unlearn_clients, self.remaining_clients)
+        print(idx_, idr_)
         
         
-    # TODO: unlearning algorithm 存错了
     def unlearning(self):
-        idx_ = [9]
-        idr_ = [0,1,2,3,4,5,6,7,8]
         print("***************", self.unlearn_clients)
         
-        for epoch in range(self.global_rounds + 1):
-            self.load_model(epoch)
-            self.old_GM = copy.deepcopy(self.global_model)
+        model_path = os.path.join("server_models", self.dataset)
+        
+        for epoch in range(0, self.global_rounds + 1, 2):
+            server_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
+            assert (os.path.exists(server_path))
+            self.old_GM = torch.load(server_path)
+            print("old GM ***:::", self.old_GM.state_dict()['base.conv1.0.weight'][0])
             
-            all_clients_model = self.load_client_model(epoch)
-            for tmp in idx_:
-                all_clients_model.pop(tmp)
-            remaining_clients_model = all_clients_model
-            
+            all_clients_class = self.load_client_model(epoch)
+            for i, client in enumerate(self.remaining_clients):
+                for c in all_clients_class:
+                    if client.id == c.id:
+                        client.set_parameters(c.model)
+            self.old_CM = copy.deepcopy(self.remaining_clients)
+
+                 
             # 产生第一次的new_GM
             if epoch == 0:
-                for i, client in enumerate(self.remaining_clients):
-                    client.set_parameters(remaining_clients_model[i])
-                self.new_GM = copy.deepcopy(self.old_GM)
-                for param in self.new_GM.parameters():
+                weight = []
+                for c in self.remaining_clients:
+                    weight.append(c.train_samples)
+                tot_sample = sum(weight)
+                weight = [i / tot_sample for i in weight]
+                pprint(weight)
+            
+                for param in self.global_model.parameters():
                     param.data.zero_()
-                weight = [self.uploaded_weights[i] for i in idr_]
-                for w, client_model in zip(weight, self.uploaded_models):
-                    self.add_parameters(w, client_model)
+                for w, client in zip(weight, self.remaining_clients):
+                    self.add_parameters(w, client.model)
                 self.new_GM = copy.deepcopy(self.global_model)
+                print(self.new_GM.state_dict()['base.conv1.0.weight'][0])
                 
-                continue
-
-            self.old_CM = copy.deepcopy(self.remaining_clients)
+            
+            """TODO: make sure the flow is right"""           
             
             # 得到新的CM，进行一步训练
-            self.send_specific_models(self.new_GM)
-            for i, client in enumerate(self.remaining_clients):
-                client.set_parameters(remaining_clients_model[i])
+            assert (len(self.remaining_clients) > 0)
+            for client in self.remaining_clients:
+                client.set_parameters(self.new_GM)
                 client.train_one_step()
             self.new_CM = copy.deepcopy(self.remaining_clients)
             
+            # 聚合一次
+            self.receive_retrained_models(self.remaining_clients)
+            self.aggregate_parameters()
+            self.new_GM = copy.deepcopy(self.global_model)
+            print("retrain ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            
             # 开始校准
             self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
+            print("new GM ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
         
         print(f"\n-------------After FedEraser-------------")
         print("\nEvaluate Eraser globel model")
-        self.evaluate()
+        self.server_metrics()
         self.eraser_global_model = copy.deepcopy(self.new_GM)
             
     
@@ -584,7 +638,7 @@ class FedAvg(Server):
             
             return_model_state[layer] = new_global_model_state[layer] + step_length*step_direction
         
-        
+        print("....", step_length, step_direction)
         return_global_model = copy.deepcopy(global_model_after_forget)
         
         return_global_model.load_state_dict(return_model_state)
@@ -594,12 +648,23 @@ class FedAvg(Server):
 
     def retrain(self):
         self.current_num_join_clients = len(self.remaining_clients)
-        self.global_model = copy.deepcopy(self.args.model)
+        self.global_model = copy.deepcopy(self.initial_model)
+        for client in self.remaining_clients:
+            client.set_parameters(self.global_model)
+        print(self.global_model.state_dict()['base.conv1.0.weight'][0])
 
         for i in range(self.global_rounds+1):
             s_t = time.time()
-            # self.send_models()
-            self.send_retrained_models()
+
+            assert (len(self.clients) > 0)
+            for client in self.remaining_clients:
+                start_time = time.time()
+                
+                client.set_parameters(self.global_model)
+
+                client.send_time_cost['num_rounds'] += 1
+                client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+                
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
@@ -614,7 +679,7 @@ class FedAvg(Server):
             if self.dlg_eval and i%self.dlg_gap == 0:
                 self.call_dlg(i)
             self.aggregate_parameters()
-            # self.save_each_round_global_model(i)
+            print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -631,6 +696,7 @@ class FedAvg(Server):
 
         self.save_results()
         self.save_global_model()
+        self.server_metrics()
         self.retrain_global_model = copy.deepcopy(self.global_model)
 
         if self.num_new_clients > 0:
@@ -646,13 +712,14 @@ class FedAvg(Server):
         # self.retrain_global_model = torch.load('models/9_2/FedAvg_server.pt')
         
         print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.retrain_global_model.state_dict()['base.conv1.0.weight'][-1])
+        print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.eraser_global_model.state_dict()['base.conv1.0.weight'][-1])
         
         attacker = self.build_MIA_attacker()
         print("\n-------------MIA evaluation against Standard FL-------------")
         (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
         
         print("\n-------------MIA evaluation against FL Unlearn-------------")
-        # (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
+        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
         
         print("\n-------------MIA evaluation against FL Retrain-------------")
         (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.retrain_global_model)
@@ -679,24 +746,31 @@ class FedAvg(Server):
         # 得到使用的dataset的 [logits, 1]
         pred_4_mem = torch.zeros([1,N_class])
         pred_4_mem = pred_4_mem.to(device)
-        print("self selected clients", len(self.selected_clients))
+        print("self remaining clients", self.remaining_clients)
         with torch.no_grad():
-            for ii in range(4, len(self.selected_clients)):
-                data_loader = self.selected_clients[ii].load_train_data()
+            for client in self.unlearn_clients:
+                data_loader = client.load_train_data()
                 for batch_idx, (data, target) in enumerate(data_loader):
                     data = data.to(device)
                     out = shadow_model(data)
                     pred_4_mem = torch.cat([pred_4_mem, out])
-        pred_4_mem = pred_4_mem[1:,:]
+            for client in self.remaining_clients:
+                data_loader = client.load_train_data()
+                for batch_idx, (data, target) in enumerate(data_loader):
+                    data = data.to(device)
+                    out = shadow_model(data)
+                    pred_4_mem = torch.cat([pred_4_mem, out])
+        pred_4_mem = pred_4_mem[1:6001,:]
         pred_4_mem = softmax(pred_4_mem,dim = 1)
         pred_4_mem = pred_4_mem.cpu()
         pred_4_mem = pred_4_mem.detach().numpy()
+        print(pred_4_mem.shape)
         
         # 得到未使用的dataset的 [logits, 0]
         import torchvision
         import torchvision.transforms as transforms
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
-        testset = torchvision.datasets.MNIST(root="FedEraser-Code/data/mnist/rawdata", train=False, download=False, transform=transform)
+        testset = torchvision.datasets.MNIST(root="data", train=False, download=True, transform=transform)
         testloader = torch.utils.data.DataLoader(testset, batch_size=len(testset.data), shuffle=False)
         
         pred_4_nonmem = torch.zeros([1,N_class])
@@ -782,6 +856,7 @@ class FedAvg(Server):
         unlearn_X = unlearn_X[1:,:]
         unlearn_X = softmax(unlearn_X,dim = 1)
         unlearn_X = unlearn_X.cpu().detach().numpy()
+        print(unlearn_X.shape)
         
         # unlearn_X.sort(axis=1)
         unlearn_y = np.ones(unlearn_X.shape[0])

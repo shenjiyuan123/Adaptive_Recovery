@@ -200,24 +200,25 @@ def read_data(dataset, idx, is_train=True):
         return test_data
     
 def read_all_test_data(dataset, range_idx):
-    # test_data_dir = os.path.join('./data', dataset, 'test/')
+    test_data_dir = os.path.join('./data', dataset, 'test/')
     
-    # for i in range(range_idx):
-    #     test_file = test_data_dir + str(i) + '.npz'
-    #     with open(test_file, 'rb') as f:
-    #         test_data = np.load(f, allow_pickle=True)['data'].tolist()
-    #         if i == 0:
-    #             test_data_x = test_data['x']
-    #             test_data_y = test_data['y']
-    #         else:
-    #             test_data['x'] = np.concatenate((test_data_x, test_data['x']), axis=0)
+    for i in range(range_idx):
+        test_file = test_data_dir + str(i) + '.npz'
+        with open(test_file, 'rb') as f:
+            test_data = np.load(f, allow_pickle=True)['data'].tolist()
+            if i == 0:
+                test_data_x = test_data['x']
+                test_data_y = test_data['y']
+            else:
+                test_data_x = np.concatenate((test_data_x, test_data['x']), axis=0)
+                test_data_y = np.concatenate((test_data_y, test_data['y']), axis=0)
                 
-    # print(len(test_data_x), test_data_y)
-    # X_test = torch.Tensor(test_data['x']).type(torch.float32)
-    # y_test = torch.Tensor(test_data['y']).type(torch.int64)
-    # test_data = [(x, y) for x, y in zip(X_test, y_test)]
-    # return test_data
-    raise NotImplementedError
+    print(len(test_data_x), len(test_data_y))
+    X_test = torch.Tensor(test_data_x).type(torch.float32)
+    y_test = torch.Tensor(test_data_y).type(torch.int64)
+    test_data = [(x, y) for x, y in zip(X_test, y_test)]
+    return test_data
+    # raise NotImplementedError
 
 
 def read_client_data(dataset, idx, is_train=True):

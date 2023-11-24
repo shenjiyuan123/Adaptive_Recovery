@@ -126,8 +126,9 @@ def run(args):
         server.train()
         
         if True:
+            # 
             server.select_unlearned_clients()
-            # server.unlearning()
+            server.unlearning()
 
             server.retrain()
             
@@ -160,8 +161,8 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=1)
-    parser.add_argument('-ls', "--local_epochs", type=int, default=1, 
+    parser.add_argument('-gr', "--global_rounds", type=int, default=10)
+    parser.add_argument('-ls', "--local_epochs", type=int, default=5, 
                         help="Multiple update steps in one local epoch.")
     parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
