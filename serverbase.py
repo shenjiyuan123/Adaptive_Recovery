@@ -458,7 +458,7 @@ class FedAvg(Server):
 
         # self.load_model()
         self.Budget = []
-        self.unlearn_clients_number = 1
+        self.unlearn_clients_number = 5
 
 
     def train(self):
@@ -467,6 +467,7 @@ class FedAvg(Server):
             s_t = time.time()
             self.selected_clients = self.select_clients()
             self.send_models()
+            self.save_each_round_global_model(i)
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
@@ -475,18 +476,12 @@ class FedAvg(Server):
             print(self.selected_clients)
             for client in self.selected_clients:
                 client.train()
-
-            # threads = [Thread(target=client.train)
-            #            for client in self.selected_clients]
-            # [t.start() for t in threads]
-            # [t.join() for t in threads]
+            
+            self.save_client_model(i)
 
             self.receive_models()
-            self.save_client_model(i)
-            if self.dlg_eval and i%self.dlg_gap == 0:
-                self.call_dlg(i)
             self.aggregate_parameters()
-            self.save_each_round_global_model(i)
+            
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -535,7 +530,7 @@ class FedAvg(Server):
         
         model_path = os.path.join("server_models", self.dataset)
         
-        for epoch in range(0, self.global_rounds + 1, 2):
+        for epoch in range(0, self.global_rounds, 2):
             server_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
             assert (os.path.exists(server_path))
             self.old_GM = torch.load(server_path)
@@ -546,9 +541,10 @@ class FedAvg(Server):
                 for c in all_clients_class:
                     if client.id == c.id:
                         client.set_parameters(c.model)
+                        # print(" /// ",c.model.state_dict()['base.conv1.0.weight'][0])
             self.old_CM = copy.deepcopy(self.remaining_clients)
 
-                 
+
             # 产生第一次的new_GM
             if epoch == 0:
                 weight = []
@@ -565,25 +561,25 @@ class FedAvg(Server):
                 self.new_GM = copy.deepcopy(self.global_model)
                 print(self.new_GM.state_dict()['base.conv1.0.weight'][0])
                 
-            
-            """TODO: make sure the flow is right"""           
+                continue
+                
             
             # 得到新的CM，进行一步训练
             assert (len(self.remaining_clients) > 0)
             for client in self.remaining_clients:
                 client.set_parameters(self.new_GM)
-                client.train_one_step()
+                client.train()
             self.new_CM = copy.deepcopy(self.remaining_clients)
             
             # 聚合一次
             self.receive_retrained_models(self.remaining_clients)
             self.aggregate_parameters()
             self.new_GM = copy.deepcopy(self.global_model)
-            print("retrain ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            print("New_GM before calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
             
             # 开始校准
             self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
-            print("new GM ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
         
         print(f"\n-------------After FedEraser-------------")
         print("\nEvaluate Eraser globel model")
@@ -675,9 +671,6 @@ class FedAvg(Server):
                 client.train()
 
             self.receive_retrained_models(self.remaining_clients)
-            # self.save_client_model(i)
-            if self.dlg_eval and i%self.dlg_gap == 0:
-                self.call_dlg(i)
             self.aggregate_parameters()
             print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 
@@ -760,18 +753,16 @@ class FedAvg(Server):
                     data = data.to(device)
                     out = shadow_model(data)
                     pred_4_mem = torch.cat([pred_4_mem, out])
-        pred_4_mem = pred_4_mem[1:6001,:]
+        pred_4_mem = pred_4_mem[1:,:]
         pred_4_mem = softmax(pred_4_mem,dim = 1)
         pred_4_mem = pred_4_mem.cpu()
         pred_4_mem = pred_4_mem.detach().numpy()
         print(pred_4_mem.shape)
         
         # 得到未使用的dataset的 [logits, 0]
-        import torchvision
-        import torchvision.transforms as transforms
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
-        testset = torchvision.datasets.MNIST(root="data", train=False, download=True, transform=transform)
-        testloader = torch.utils.data.DataLoader(testset, batch_size=len(testset.data), shuffle=False)
+        import dataset_utils
+        testset = dataset_utils.read_all_test_data(self.dataset, 50)
+        testloader = torch.utils.data.DataLoader(testset, self.batch_size, drop_last=False, shuffle=True)
         
         pred_4_nonmem = torch.zeros([1,N_class])
         pred_4_nonmem = pred_4_nonmem.to(device)
@@ -865,28 +856,30 @@ class FedAvg(Server):
         N_unlearn_sample = len(unlearn_y)
         
         # 得到test的数据，标记为 [logits, 0]
-        # test_X = torch.zeros([1, N_class])
-        # test_X = test_X.to(device)
-        # with torch.no_grad():
-        #     for ii in range(len(self.clients)):
-        #         data_loader = self.clients[ii].load_test_data()
-        #         for _, (data, target) in enumerate(data_loader):
-        #             data = data.to(device)
-        #             out = target_model(data)
-        #             test_X = torch.cat([test_X, out])
-                
-        #             if(test_X.shape[0] > N_unlearn_sample):
-        #                 break
+        test_X = torch.zeros([1, N_class])
+        test_X = test_X.to(device)
+        import dataset_utils
+        testset = dataset_utils.read_all_test_data(self.dataset, 50)
+        testloader = torch.utils.data.DataLoader(testset, self.batch_size, drop_last=False, shuffle=True)
+        with torch.no_grad():
+            for _, (data, target) in enumerate(testloader):
+                data = data.to(device)
+                out = target_model(data)
+                test_X = torch.cat([test_X, out])
+            
+                if(test_X.shape[0] > N_unlearn_sample):
+                    break
                     
-        # test_X = test_X[1:N_unlearn_sample+1,:]
-        # test_X = softmax(test_X,dim = 1)
-        # test_X = test_X.cpu().detach().numpy()
+        test_X = test_X[1:N_unlearn_sample+1,:]
+        test_X = softmax(test_X,dim = 1)
+        test_X = test_X.cpu().detach().numpy()
         
-        # test_X.sort(axis=1)
-        # test_y = np.zeros(test_X.shape[0])
-        # test_y = test_y.astype(np.int16)
+        test_X.sort(axis=1)
+        test_y = np.zeros(test_X.shape[0])
+        test_y = test_y.astype(np.int16)
         
-        # 理想状态应该是: unlearn的为全错，test的为全对
+
+        # 理想状态应该是: unlearn的为全错，test的为全对. 
         XX = np.vstack((unlearn_X))
         YY = np.hstack((unlearn_y))
         

@@ -10,7 +10,7 @@ from dataset_utils import check, separate_data, split_data, save_file
 
 random.seed(1)
 np.random.seed(1)
-num_clients = 50
+num_clients = 100
 num_classes = 10
 dir_path = "data/mnist/"
 
