@@ -26,6 +26,7 @@ class Server(object):
         self.initial_model = copy.deepcopy(args.model)
         print("initial:", self.initial_model.state_dict()['base.conv1.0.weight'][0])
         self.global_model = copy.deepcopy(args.model)
+        self.total_clients = len(os.listdir('data/mnist/test'))
         self.num_clients = args.num_clients
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
@@ -160,8 +161,6 @@ class Server(object):
                 self.uploaded_models.append(client.model)
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
-        
-        print(self.uploaded_ids, len(remaining_clients), len(self.uploaded_models))
             
 
     def aggregate_parameters(self):
@@ -261,7 +260,7 @@ class Server(object):
         from torch.utils.data import DataLoader
         from sklearn.preprocessing import label_binarize
         from sklearn import metrics
-        testdata = dataset_utils.read_all_test_data(self.dataset, 50)
+        testdata = dataset_utils.read_all_test_data(self.dataset, self.total_clients)
         testloader = DataLoader(testdata, self.batch_size, drop_last=False, shuffle=True)
         self.global_model.eval()
 
@@ -530,7 +529,7 @@ class FedAvg(Server):
         
         model_path = os.path.join("server_models", self.dataset)
         
-        for epoch in range(0, self.global_rounds, 2):
+        for epoch in range(0, self.global_rounds, 1):
             server_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
             assert (os.path.exists(server_path))
             self.old_GM = torch.load(server_path)
@@ -575,11 +574,11 @@ class FedAvg(Server):
             self.receive_retrained_models(self.remaining_clients)
             self.aggregate_parameters()
             self.new_GM = copy.deepcopy(self.global_model)
-            print("New_GM before calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            # print("New_GM before calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
             
             # 开始校准
             self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
-            print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            # print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
         
         print(f"\n-------------After FedEraser-------------")
         print("\nEvaluate Eraser globel model")
@@ -634,7 +633,7 @@ class FedAvg(Server):
             
             return_model_state[layer] = new_global_model_state[layer] + step_length*step_direction
         
-        print("....", step_length, step_direction)
+        # print("....", step_length, step_direction)
         return_global_model = copy.deepcopy(global_model_after_forget)
         
         return_global_model.load_state_dict(return_model_state)
@@ -666,7 +665,7 @@ class FedAvg(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
-            print(self.remaining_clients)
+            print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))
             for client in self.remaining_clients:
                 client.train()
 
@@ -747,21 +746,21 @@ class FedAvg(Server):
                     data = data.to(device)
                     out = shadow_model(data)
                     pred_4_mem = torch.cat([pred_4_mem, out])
-            for client in self.remaining_clients:
-                data_loader = client.load_train_data()
-                for batch_idx, (data, target) in enumerate(data_loader):
-                    data = data.to(device)
-                    out = shadow_model(data)
-                    pred_4_mem = torch.cat([pred_4_mem, out])
+            # for client in self.remaining_clients:
+            #     data_loader = client.load_train_data()
+            #     for batch_idx, (data, target) in enumerate(data_loader):
+            #         data = data.to(device)
+            #         out = shadow_model(data)
+            #         pred_4_mem = torch.cat([pred_4_mem, out])
         pred_4_mem = pred_4_mem[1:,:]
         pred_4_mem = softmax(pred_4_mem,dim = 1)
         pred_4_mem = pred_4_mem.cpu()
         pred_4_mem = pred_4_mem.detach().numpy()
-        print(pred_4_mem.shape)
+        unlearn_data_nums = pred_4_mem.shape[0]
         
         # 得到未使用的dataset的 [logits, 0]
         import dataset_utils
-        testset = dataset_utils.read_all_test_data(self.dataset, 50)
+        testset = dataset_utils.read_all_test_data(self.dataset, self.total_clients)
         testloader = torch.utils.data.DataLoader(testset, self.batch_size, drop_last=False, shuffle=True)
         
         pred_4_nonmem = torch.zeros([1,N_class])
@@ -771,7 +770,7 @@ class FedAvg(Server):
                 data = data.to(device)
                 out = shadow_model(data)
                 pred_4_nonmem = torch.cat([pred_4_nonmem, out])
-        pred_4_nonmem = pred_4_nonmem[1:,:]
+        pred_4_nonmem = pred_4_nonmem[1:unlearn_data_nums+1,:]
         pred_4_nonmem = softmax(pred_4_nonmem,dim = 1)
         pred_4_nonmem = pred_4_nonmem.cpu()
         pred_4_nonmem = pred_4_nonmem.detach().numpy()
@@ -859,7 +858,7 @@ class FedAvg(Server):
         test_X = torch.zeros([1, N_class])
         test_X = test_X.to(device)
         import dataset_utils
-        testset = dataset_utils.read_all_test_data(self.dataset, 50)
+        testset = dataset_utils.read_all_test_data(self.dataset, self.total_clients)
         testloader = torch.utils.data.DataLoader(testset, self.batch_size, drop_last=False, shuffle=True)
         with torch.no_grad():
             for _, (data, target) in enumerate(testloader):

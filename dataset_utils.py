@@ -213,7 +213,7 @@ def read_all_test_data(dataset, range_idx):
                 test_data_x = np.concatenate((test_data_x, test_data['x']), axis=0)
                 test_data_y = np.concatenate((test_data_y, test_data['y']), axis=0)
                 
-    print(len(test_data_x), len(test_data_y))
+    print("all test set numbers: ", len(test_data_x), len(test_data_y))
     X_test = torch.Tensor(test_data_x).type(torch.float32)
     y_test = torch.Tensor(test_data_y).type(torch.int64)
     test_data = [(x, y) for x, y in zip(X_test, y_test)]
