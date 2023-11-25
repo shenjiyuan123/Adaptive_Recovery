@@ -11,6 +11,7 @@ import logging
 import torch.nn as nn
 
 from serverbase import FedAvg
+from servercrab import Crab
 
 from trainmodel.models import *
 
@@ -118,14 +119,18 @@ def run(args):
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
-            server = FedAvg(args, i)
+            # server = FedAvg(args, i)
+            server = Crab(args, i)
             
         else:
             raise NotImplementedError
 
-        server.train()
+        # server.train()
         
         if True:
+            server.train_with_select()
+        
+        if False:
             # 
             server.select_unlearned_clients()
             server.unlearning()
