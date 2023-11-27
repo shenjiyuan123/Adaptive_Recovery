@@ -24,7 +24,7 @@ class Server(object):
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.initial_model = copy.deepcopy(args.model)
-        print("initial:", self.initial_model.state_dict()['base.conv1.0.weight'][0])
+        # print("initial:", self.initial_model.state_dict()['base.conv1.0.weight'][0])
         self.global_model = copy.deepcopy(args.model)
         self.total_clients = len(os.listdir('data/mnist/test'))
         self.num_clients = args.num_clients
@@ -67,6 +67,8 @@ class Server(object):
         self.new_clients = []
         self.eval_new_clients = False
         self.fine_tuning_epoch = args.fine_tuning_epoch
+        
+        self.remaining_clients = []
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -299,7 +301,7 @@ class Server(object):
         auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
         print("Average Test Accurancy: {:.4f}".format(acc))
         print("Average Test AUC: {:.4f}".format(auc))
-        return acc, auc
+        return acc, acc
 
     def test_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -309,13 +311,20 @@ class Server(object):
         num_samples = []
         tot_correct = []
         tot_auc = []
-        for c in self.clients:
-            ct, ns, auc = c.test_metrics()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
-            num_samples.append(ns)
-
-        ids = [c.id for c in self.clients]
+        if not self.remaining_clients:
+            for c in self.clients:
+                ct, ns, auc = c.test_metrics()
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
+            ids = [c.id for c in self.clients]
+        else:
+            for c in self.remaining_clients:
+                ct, ns, auc = c.test_metrics()
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
+            ids = [c.id for c in self.remaining_clients]
 
         return ids, num_samples, tot_correct, tot_auc
 
@@ -325,12 +334,20 @@ class Server(object):
         
         num_samples = []
         losses = []
-        for c in self.clients:
-            cl, ns = c.train_metrics()
-            num_samples.append(ns)
-            losses.append(cl*1.0)
+        if not self.remaining_clients:
+            for c in self.clients:
+                cl, ns = c.train_metrics()
+                num_samples.append(ns)
+                losses.append(cl*1.0)
 
-        ids = [c.id for c in self.clients]
+            ids = [c.id for c in self.clients]
+        else:
+            for c in self.remaining_clients:
+                cl, ns = c.train_metrics()
+                num_samples.append(ns)
+                losses.append(cl*1.0)
+
+            ids = [c.id for c in self.remaining_clients]
 
         return ids, num_samples, losses
 
@@ -457,11 +474,11 @@ class FedAvg(Server):
 
         # self.load_model()
         self.Budget = []
-        self.unlearn_clients_number = 5
+        self.unlearn_clients_number = args.unlearn_clients_number
 
 
     def train(self):
-        print(self.global_model.state_dict()['base.conv1.0.weight'][0])
+        # print(self.global_model.state_dict()['base.conv1.0.weight'][0])
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -472,7 +489,8 @@ class FedAvg(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
-            print(self.selected_clients)
+                # self.server_metrics()
+            # print(self.selected_clients)
             for client in self.selected_clients:
                 client.train()
             
@@ -510,17 +528,17 @@ class FedAvg(Server):
             
     def select_unlearned_clients(self):
         self.selected_clients = self.select_clients()
-        print(self.selected_clients)
         
         id_selected_clients = [c.id for c in self.selected_clients] 
         
         idx_ = random.sample(id_selected_clients, self.unlearn_clients_number)
         # idx_ = [9]
         idr_ = [i for i in id_selected_clients if i not in idx_]
+        self.idr_ = idr_
         # idr_ = [0,1,2,3,4,5,6,7,8]
         self.unlearn_clients = [c for c in self.selected_clients if c.id in idx_]
         self.remaining_clients = [c for c in self.selected_clients if c.id in idr_]
-        print(self.unlearn_clients, self.remaining_clients)
+        # print(self.unlearn_clients, self.remaining_clients)
         print(idx_, idr_)
         
         
@@ -533,7 +551,7 @@ class FedAvg(Server):
             server_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
             assert (os.path.exists(server_path))
             self.old_GM = torch.load(server_path)
-            print("old GM ***:::", self.old_GM.state_dict()['base.conv1.0.weight'][0])
+            # print("old GM ***:::", self.old_GM.state_dict()['base.conv1.0.weight'][0])
             
             all_clients_class = self.load_client_model(epoch)
             for i, client in enumerate(self.remaining_clients):
@@ -558,7 +576,7 @@ class FedAvg(Server):
                 for w, client in zip(weight, self.remaining_clients):
                     self.add_parameters(w, client.model)
                 self.new_GM = copy.deepcopy(self.global_model)
-                print(self.new_GM.state_dict()['base.conv1.0.weight'][0])
+                # print(self.new_GM.state_dict()['base.conv1.0.weight'][0])
                 
                 continue
                 
@@ -656,7 +674,7 @@ class FedAvg(Server):
                 start_time = time.time()
                 
                 client.set_parameters(self.global_model)
-
+                
                 client.send_time_cost['num_rounds'] += 1
                 client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
                 
@@ -665,7 +683,9 @@ class FedAvg(Server):
                 print(f"\n-------------Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
-            print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))
+                # self.server_metrics()
+                
+            # print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))
             for client in self.remaining_clients:
                 client.train()
 
@@ -738,9 +758,9 @@ class FedAvg(Server):
         # 得到使用的dataset的 [logits, 1]
         pred_4_mem = torch.zeros([1,N_class])
         pred_4_mem = pred_4_mem.to(device)
-        print("self remaining clients", self.remaining_clients)
+        # print("self remaining clients", self.remaining_clients)
         with torch.no_grad():
-            for client in self.unlearn_clients:
+            for client in self.clients:
                 data_loader = client.load_train_data()
                 for batch_idx, (data, target) in enumerate(data_loader):
                     data = data.to(device)
@@ -786,7 +806,7 @@ class FedAvg(Server):
         X_train, X_test, y_train, y_test = train_test_split(att_X, att_y, test_size = 0.1)
         print(pred_4_mem.shape[0], pred_4_nonmem.shape[0])
         
-        attacker = XGBClassifier(n_estimators = 300,
+        attacker = XGBClassifier(n_estimators = 500,
                                 n_jobs = -1,
                                 max_depth = 30,
                                 objective = 'binary:logistic',
@@ -809,7 +829,7 @@ class FedAvg(Server):
         return attacker
         
     
-    def MIA_attack(self, attacker, target_model):
+    def MIA_attack(self, attacker, target_model, T=0.9):
         """使用在正常 FL 过程得到的 Global model, 测试遗忘程度
 
         Args:

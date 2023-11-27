@@ -6,6 +6,7 @@ import h5py
 import copy
 import time
 import random
+import json
 from pprint import pprint
 
 from dataset_utils import read_client_data
@@ -16,12 +17,9 @@ from clientbase import clientAVG
 class Crab(FedAvg):
     def __init__(self, args, times):
         super().__init__(args, times)
-        
-        self.info_storage = {
-            'round_selection': [],
-            'client_selection': {},
-            'grad_selection': {}
-        }
+
+        # 'client_selection': []
+        self.info_storage = {}
     
     def evaluate(self, acc=None, loss=None):
         stats = self.test_metrics()
@@ -122,6 +120,7 @@ class Crab(FedAvg):
             for g_module, c_module in zip(target_GM, client):
                 if len(g_module.shape) > 1:
                     cos = torch.cosine_similarity(g_module, c_module)
+                    # TODO: 是否考虑 abs(cos)
                     cos_sim.append(torch.mean(cos).cpu().item())
             similarity.append(np.mean(cos_sim))
         sel_client = np.argsort(similarity)[::-1]
@@ -137,7 +136,7 @@ class Crab(FedAvg):
 
 
     def train_with_select(self):
-        print(self.global_model.state_dict()['base.conv1.0.weight'][0])
+        # print(self.global_model.state_dict()['base.conv1.0.weight'][0])
         alpha = 0.1
         GM_list = []
         start_epoch = 0
@@ -166,7 +165,9 @@ class Crab(FedAvg):
                 print("pick rounds: ", rounds)
                 for round in rounds:
                     clients_id = self.select_client_in_round(round, GM_list, start_epoch)
-                    print("select clients from epoch {round}: ", clients_id)
+                    print(f"select clients from epoch {round}: {clients_id}")
+                    self.info_storage[int(round)] = clients_id
+                    
                 # for client in clients_id:
                     # gradient = self.select_grad_in_client()
                 
@@ -187,6 +188,7 @@ class Crab(FedAvg):
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
+            
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
@@ -198,9 +200,71 @@ class Crab(FedAvg):
         print("\nAverage time cost per round.")
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
+
+        print('write the select information into the txt...')
+        if not os.path.exists(self.save_folder_name):
+            os.makedirs(self.save_folder_name)
+        path = os.path.join(self.save_folder_name, "server_select_info" + ".txt")
+        self.info_storage = dict(sorted(self.info_storage.items()))
+        with open(path, 'w') as storage: 
+            storage.write(json.dumps(self.info_storage))
+            
         self.save_results()
         # self.save_global_model()
         self.server_metrics()
         self.FL_global_model = copy.deepcopy(self.global_model)
 
+
+    def recovery(self):
+        print("***************", self.unlearn_clients)
+        
+        model_path = os.path.join("server_models", self.dataset)
+        
+        for global_round, select_clients_in_round in self.info_storage.items():
+            server_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(global_round) + ".pt")
+            self.old_GM = torch.load(server_path)
+            
+            select_clients_in_round = [id for id in select_clients_in_round if id in self.idr_]
+            
+            all_clients_class = self.load_client_model(global_round)
+            # 此处copy一份remaining_clients，因为recovery的时候可能遗忘的id包含贡献度大的那个client
+            self.old_clients = copy.deepcopy(self.remaining_clients)  
+            self.old_CM = []
+            for i, client in enumerate(self.old_clients):
+                for c in all_clients_class:
+                    if client.id == c.id:
+                        client.set_parameters(c.model)
+                        # print(" /// ",c.model.state_dict()['base.conv1.0.weight'][0])
+                if client.id in select_clients_in_round:
+                    self.old_CM.append(client)
+            print([c.id for c in self.old_CM])
+            
+            self.old_clients = copy.deepcopy(self.old_CM)
+            
+            
+            # 得到新的GM
+            assert (len(self.old_CM) <= len(select_clients_in_round))
+            for client in self.old_clients:
+                client.set_parameters(self.old_GM)
+                client.train_one_step()
+
+            self.receive_retrained_models(self.old_clients)
+            self.aggregate_parameters()
+            self.new_GM = copy.deepcopy(self.global_model)
+            # print("New_GM before calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            
+            # 得到新的CM
+            for client in self.old_clients:
+                client.set_parameters(self.new_GM)
+                client.train_one_step()
+            self.new_CM = copy.deepcopy(self.old_clients)
+            
+            # 开始校准
+            self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
+            print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+        
+        print(f"\n-------------After FedEraser-------------")
+        print("\nEvaluate Eraser globel model")
+        self.server_metrics()
+        self.eraser_global_model = copy.deepcopy(self.new_GM)
 
