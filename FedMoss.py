@@ -10,8 +10,9 @@ import torchvision
 import logging
 import torch.nn as nn
 
-from serverbase import FedAvg
-from servercrab import Crab
+from serverEraser import FedEraser
+from serverCrab import Crab
+from serverFedRecover import FedRecover
 
 from trainmodel.models import *
 
@@ -115,32 +116,45 @@ def run(args):
         print(args.model)
 
         # select algorithm
-        if args.algorithm == "FedAvg":
+        if args.algorithm == "FedEraser":
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
-            # server = FedAvg(args, i)
-            server = Crab(args, i)
+            server = FedEraser(args, i)
             
-        else:
-            raise NotImplementedError
-
-        
-        if True:
-            server.train_with_select()
-            server.select_unlearned_clients()
-            server.recovery()
-            server.retrain()
-            
-            server.MIA_metrics()
-        
-        if False:
             server.train()
             server.select_unlearned_clients()
             server.unlearning()
             server.retrain()
             
+        elif args.algorithm == "FedRecover":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = FedRecover(args, i)
+            
+            server.train()
+            server.select_unlearned_clients()
+            server.retrain()
+            server.recover()
+        
+        elif args.algorithm == "Crab":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = Crab(args, i)
+            
+            server.train_with_select()
+            server.select_unlearned_clients()
+            server.adaptive_recover()
+            server.retrain()
+            
+        else:
+            raise NotImplementedError
+
+        if args.verify_unlearn:
             server.MIA_metrics()
+
 
         time_list.append(time.time()-start)
 
@@ -169,15 +183,18 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=10)
+    parser.add_argument('-gr', "--global_rounds", type=int, default=20)
     parser.add_argument('-ls', "--local_epochs", type=int, default=5,
                         help="Multiple update steps in one local epoch.")
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedAvg")
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["FedEraser", "FedRecover", "Crab"],
+                        help="How to unlearn the target clients")
+    parser.add_argument('-verify', "--verify_unlearn", type=bool, default=True,
+                        help="Whether use the MIA or backdoor to verify the unlearn effectiveness")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument('-nc', "--num_clients", type=int, default=40,
+    parser.add_argument('-nc', "--num_clients", type=int, default=20,
                         help="Total number of clients")
     parser.add_argument('-unlearn', "--unlearn_clients_number", type=int, default=10,
                         help="Total number of unlearn clients")

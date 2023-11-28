@@ -6,20 +6,36 @@ Official implementation of paper Crab. Crab can achieve efficient recovery from 
 ## Generate the dataset
 For example, if want to generate the MNIST, you can use
 ```
-python generate_mnist.py iid - - # for iid and unbalanced scenario
-# python generate_mnist.py iid balance - # for iid and balanced scenario
-# python generate_mnist.py noniid - pat # for pathological noniid and unbalanced scenario
-# python generate_mnist.py noniid - dir # for practical noniid and unbalanced scenario
+python generate_mnist.py iid - -                # for iid and unbalanced scenario
+# python generate_mnist.py iid balance -        # for iid and balanced scenario
+# python generate_mnist.py noniid - pat         # for pathological noniid and unbalanced scenario   
+# python generate_mnist.py noniid - dir         # for practical noniid and unbalanced scenario
 ```
-Note: the file is 'add' mode, so notice to delete the original split files before generate the dataset.
+Note: the split file of train/test is 'add' mode, so notice to delete the original split files if you want to re-split the dataset.
 
-## Federated Learning and Unlearning
-We implement all the learning and unlearning function in the object of FedAvg, which inherit the Base Server object. 
+## How to start the end-to-end recovery
+For now, the support recovery algorithms includes **Retrain, FedEraser, FedRecover and Crab**. 
 
-One end-to-end running example contains Normal Learning, FedEraser, Retrain and MIA attack metrics. 
+For example, to execute the `Crab` recovery simulation, run the following commands:
+```python
+python FedMoss.py       --dataset mnist                 \
+                        --global_rounds 20              \
+                        --local_epochs 5                \
+                        --algorithm Crab                \    
+                        --verify_unlearn True           \    
+                        --num_clients 20                \    
+                        --unlearn_clients_number 10     \     
 ```
-python FedMoss.py
-```
+
+- `dataset`: The name of experiment dataset.
+- `global_rounds`: The communication rounds between clients and server.
+- `local_epochs`: The training epochs of each clients. 
+- `algorithm`: The recovery algorithm, can choose **Retrain, FedEraser, FedRecover and Crab**.
+- `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
+- `num_clients`: The total number of clients.
+- `unlearn_clients_number`: The targeted client number.
+
+
 
 
 ## Acknowledge

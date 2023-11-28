@@ -10,11 +10,10 @@ import json
 from pprint import pprint
 
 from dataset_utils import read_client_data
-from serverbase import FedAvg, Server
-from clientbase import clientAVG
+from serverEraser import FedEraser
 
 
-class Crab(FedAvg):
+class Crab(FedEraser):
     def __init__(self, args, times):
         super().__init__(args, times)
 
@@ -215,7 +214,7 @@ class Crab(FedAvg):
         self.FL_global_model = copy.deepcopy(self.global_model)
 
 
-    def recovery(self):
+    def adaptive_recover(self):
         print("***************", self.unlearn_clients)
         
         model_path = os.path.join("server_models", self.dataset)
