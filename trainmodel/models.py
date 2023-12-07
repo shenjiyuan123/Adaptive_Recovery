@@ -211,6 +211,22 @@ class FedAvgMLP(nn.Module):
 
 # ====================================================================================================================
 
+class MLP(nn.Module):
+    def __init__(self, in_features=10, num_classes=10, hidden_dim=64):
+        super(MLP, self).__init__()
+        self.fc_1 = nn.Linear(in_features, hidden_dim)
+        self.fc_2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_3 = nn.Linear(hidden_dim, num_classes)
+
+    def forward(self, x):
+        out = x.view(x.size(0), -1)
+        out = F.relu(self.fc_1(out))
+        out = F.relu(self.fc_2(out))
+        out = self.fc_3(out)
+        return out
+    
+# ====================================================================================================================
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()

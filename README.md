@@ -18,7 +18,9 @@ For now, the support recovery algorithms includes **Retrain, FedEraser, FedRecov
 
 For example, to execute the `Crab` recovery simulation, run the following commands:
 ```python
-python FedMoss.py       --dataset mnist                 \
+python FedMoss.py       --algorithm Crab                \
+                        --verify_unlearn                \
+                        --dataset mnist                 \
                         --global_rounds 20              \
                         --local_epochs 5                \
                         --algorithm Crab                \    
@@ -26,7 +28,9 @@ python FedMoss.py       --dataset mnist                 \
                         --num_clients 20                \    
                         --unlearn_clients_number 10     \     
 ```
+If you want to add the backdoor attack, need to add the argument `--backdoor_attack`.
 
+Parameters:
 - `dataset`: The name of experiment dataset.
 - `global_rounds`: The communication rounds between clients and server.
 - `local_epochs`: The training epochs of each clients. 
@@ -34,7 +38,6 @@ python FedMoss.py       --dataset mnist                 \
 - `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
 - `num_clients`: The total number of clients.
 - `unlearn_clients_number`: The targeted client number.
-
 
 
 

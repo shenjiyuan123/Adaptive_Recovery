@@ -221,13 +221,22 @@ def read_all_test_data(dataset, range_idx):
     # raise NotImplementedError
 
 
-def read_client_data(dataset, idx, is_train=True):
+def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_size=4):
 
     if is_train:
         train_data = read_data(dataset, idx, is_train)
+        
         X_train = torch.Tensor(train_data['x']).type(torch.float32)
         y_train = torch.Tensor(train_data['y']).type(torch.int64)
 
+        # 在右下角加一个白色的trigger, 标记为0
+        if create_trigger:
+            X_train[:, :, -trigger_size:, -trigger_size:] = 1
+            X_train = torch.Tensor(train_data['x']).type(torch.float32)
+            y_train = torch.zeros(size=y_train.size()).type(torch.int64)
+            # print("trigger: ///", idx, X_train[0,0,-1,-1], y_train[-1])
+        
+        
         train_data = [(x, y) for x, y in zip(X_train, y_train)]
         return train_data
     else:

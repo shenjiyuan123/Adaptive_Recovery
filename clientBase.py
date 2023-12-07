@@ -30,6 +30,9 @@ class Client(object):
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs
+        
+        # self.create_trigger_id = args.create_trigger_id
+        self.trigger_size = args.trigger_size
 
         # check BatchNorm
         self.has_BatchNorm = False
@@ -55,10 +58,14 @@ class Client(object):
         self.learning_rate_decay = args.learning_rate_decay
 
 
-    def load_train_data(self, batch_size=None):
+    def load_train_data(self, batch_size=None, create_trigger=False):
         if batch_size == None:
             batch_size = self.batch_size
-        train_data = read_client_data(self.dataset, self.id, is_train=True)
+        # if self.id == self.create_trigger_id:
+        if create_trigger:
+            train_data = read_client_data(self.dataset, self.id, is_train=True, create_trigger=True, trigger_size=self.trigger_size)
+        else:
+            train_data = read_client_data(self.dataset, self.id, is_train=True)
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
 
     def load_test_data(self, batch_size=None):
@@ -186,8 +193,8 @@ class clientAVG(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
 
-    def train(self):
-        trainloader = self.load_train_data()
+    def train(self, create_trigger=False):
+        trainloader = self.load_train_data(create_trigger=create_trigger)
         # self.model.to(self.device)
         self.model.train()
         
@@ -257,9 +264,8 @@ class clientFedRecover(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
         
-        
-    def train(self):
-        trainloader = self.load_train_data()
+    def train(self, create_trigger=False):
+        trainloader = self.load_train_data(create_trigger=create_trigger)
         # self.model.to(self.device)
         self.model.train()
         
@@ -294,7 +300,7 @@ class clientFedRecover(Client):
         
         
     def retrain_with_LBFGS(self):
-        self.optimizer = torch.optim.LBFGS(params = self.model.parameters(), lr=self.learning_rate, history_size=10, max_iter=8)
+        self.optimizer = torch.optim.LBFGS(params = self.model.parameters(), lr=self.learning_rate, history_size=2, max_iter=4)
         trainloader = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()

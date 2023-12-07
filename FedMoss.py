@@ -122,8 +122,8 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedEraser(args, i)
             
-            server.train()
             server.select_unlearned_clients()
+            server.train()
             server.unlearning()
             server.retrain()
             
@@ -133,8 +133,8 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedRecover(args, i)
             
-            server.train()
             server.select_unlearned_clients()
+            server.train()
             server.retrain()
             server.recover()
         
@@ -144,8 +144,8 @@ def run(args):
             args.model = BaseHeadSplit(args.model, args.head)
             server = Crab(args, i)
             
-            server.train_with_select()
             server.select_unlearned_clients()
+            server.train_with_select()
             server.adaptive_recover()
             server.retrain()
             
@@ -188,7 +188,7 @@ if __name__ == "__main__":
                         help="Multiple update steps in one local epoch.")
     parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["FedEraser", "FedRecover", "Crab"],
                         help="How to unlearn the target clients")
-    parser.add_argument('-verify', "--verify_unlearn", type=bool, default=True,
+    parser.add_argument('-verify', "--verify_unlearn", action='store_true',
                         help="Whether use the MIA or backdoor to verify the unlearn effectiveness")
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
@@ -196,8 +196,12 @@ if __name__ == "__main__":
                         help="Random ratio of clients per round")
     parser.add_argument('-nc', "--num_clients", type=int, default=20,
                         help="Total number of clients")
-    parser.add_argument('-unlearn', "--unlearn_clients_number", type=int, default=10,
+    parser.add_argument('-unlearn', "--unlearn_clients_number", type=int, default=5,
                         help="Total number of unlearn clients")
+    parser.add_argument('-backdoor', '--backdoor_attack', action='store_true', 
+                    help="Whether to inject backdoor attack towards the target clients")
+    parser.add_argument('-trigger_size', type=int, default=4,
+                        help="Size of injected trigger")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,

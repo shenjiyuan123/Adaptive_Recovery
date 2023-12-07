@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import os
 import numpy as np
 import h5py
@@ -6,6 +7,12 @@ import copy
 import time
 import random
 from pprint import pprint
+from torch.nn.functional import softmax
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+from MIA_utils import ShadowDataset
+from torch.utils.data import DataLoader
 
 from clientBase import clientAVG
 from dataset_utils import read_client_data
@@ -40,6 +47,7 @@ class Server(object):
         self.save_folder_name = args.save_folder_name
         self.top_cnt = 100
         self.auto_break = args.auto_break
+        self.backdoor_attack = args.backdoor_attack
 
         self.clients = []
         self.selected_clients = []
@@ -473,11 +481,12 @@ class Server(object):
         # idx_ = [9]
         idr_ = [i for i in id_selected_clients if i not in idx_]
         self.idr_ = idr_
+        self.idx_ = idx_
         # idr_ = [0,1,2,3,4,5,6,7,8]
         self.unlearn_clients = [c for c in self.selected_clients if c.id in idx_]
         self.remaining_clients = [c for c in self.selected_clients if c.id in idr_]
         # print(self.unlearn_clients, self.remaining_clients)
-        print(idx_, idr_)
+        print(f"Target clients id: {idx_} \nRemaining clients id: {idr_}.")
     
     def MIA_metrics(self):
         # self.FL_global_model = torch.load('models/10_2/FedAvg_server.pt')
@@ -486,7 +495,10 @@ class Server(object):
         print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.retrain_global_model.state_dict()['base.conv1.0.weight'][-1])
         print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.eraser_global_model.state_dict()['base.conv1.0.weight'][-1])
         
+        del self.remaining_clients
+        
         attacker = self.build_MIA_attacker()
+        # attacker = self.train_attack()
         print("\n-------------MIA evaluation against Standard FL-------------")
         (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
         
@@ -521,7 +533,10 @@ class Server(object):
         # print("self remaining clients", self.remaining_clients)
         with torch.no_grad():
             for client in self.clients:
-                data_loader = client.load_train_data()
+                if client in self.unlearn_clients and self.backdoor_attack:
+                    data_loader = client.load_train_data(create_trigger=True)
+                else:
+                    data_loader = client.load_train_data()
                 for batch_idx, (data, target) in enumerate(data_loader):
                     data = data.to(device)
                     out = shadow_model(data)
@@ -564,15 +579,15 @@ class Server(object):
         # att_X.sort(axis=1)
         
         X_train, X_test, y_train, y_test = train_test_split(att_X, att_y, test_size = 0.1)
-        print(pred_4_mem.shape[0], pred_4_nonmem.shape[0])
+        print(f"Training samples size: {pred_4_mem.shape[0]}, Test samples size: {pred_4_nonmem.shape[0]}")
         
         attacker = XGBClassifier(n_estimators = 500,
                                 n_jobs = -1,
                                 max_depth = 30,
                                 objective = 'binary:logistic',
-                                booster="gbtree",
-                                # learning_rate=None,
-                                # tree_method = 'gpu_hist',
+                                booster= "gbtree",
+                                tree_method = 'gpu_hist',
+                                device = self.device,
                                 scale_pos_weight = pred_4_nonmem.shape[0]/pred_4_mem.shape[0]
                                 )
         
@@ -587,6 +602,7 @@ class Server(object):
         print("Test MIA Attacker test accuracy = {:.4f}".format(acc))
         
         return attacker
+         
         
     
     def MIA_attack(self, attacker, target_model, T=0.9):
@@ -617,7 +633,10 @@ class Server(object):
         print(len(self.unlearn_clients))
         with torch.no_grad():
             for ii in range(len(self.unlearn_clients)):
-                data_loader = self.unlearn_clients[ii].load_train_data()
+                if self.backdoor_attack:
+                    data_loader = self.unlearn_clients[ii].load_train_data(create_trigger=True)
+                else:
+                    data_loader = self.unlearn_clients[ii].load_train_data()
                 for batch, (data, target) in enumerate(data_loader):
                     data = data.to(device)
                     out = target_model(data)
@@ -694,7 +713,7 @@ class Server(object):
                 
 
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
+                print(f"\n-------------Retrain Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
                 # self.server_metrics()
@@ -733,8 +752,123 @@ class Server(object):
             self.evaluate()
   
 
+    ################################################################################################################   
+    ''' 
+    An alternative to construct the MIA model by using MLP
+    '''
+    def train_attack(self):
+        
+        shadow_model = self.FL_global_model
+        n_class_dict = dict()
+        n_class_dict['mnist'] = 10
+        n_class_dict['cifar10'] = 10
+        
+        N_class = n_class_dict[self.dataset]
+        
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        shadow_model.to(device)
+            
+        shadow_model.eval()
+        
+        # 得到使用的dataset的 [logits, 1]
+        pred_4_mem = torch.zeros([1,N_class])
+        pred_4_mem = pred_4_mem.to(device)
+        # print("self remaining clients", self.remaining_clients)
+        with torch.no_grad():
+            for client in self.clients:
+                data_loader = client.load_train_data()
+                for batch_idx, (data, target) in enumerate(data_loader):
+                    data = data.to(device)
+                    out = shadow_model(data)
+                    pred_4_mem = torch.cat([pred_4_mem, out])
+            # for client in self.remaining_clients:
+            #     data_loader = client.load_train_data()
+            #     for batch_idx, (data, target) in enumerate(data_loader):
+            #         data = data.to(device)
+            #         out = shadow_model(data)
+            #         pred_4_mem = torch.cat([pred_4_mem, out])
+        pred_4_mem = pred_4_mem[1:,:]
+        pred_4_mem = softmax(pred_4_mem,dim = 1)
+        pred_4_mem = pred_4_mem.cpu()
+        pred_4_mem = pred_4_mem.detach().numpy()
+        unlearn_data_nums = pred_4_mem.shape[0]
+        
+        # 得到未使用的dataset的 [logits, 0]
+        import dataset_utils
+        testset = dataset_utils.read_all_test_data(self.dataset, self.total_clients)
+        testloader = torch.utils.data.DataLoader(testset, self.batch_size, drop_last=False, shuffle=True)
+        
+        pred_4_nonmem = torch.zeros([1,N_class])
+        pred_4_nonmem = pred_4_nonmem.to(device)
+        with torch.no_grad():
+            for batch, (data, target) in enumerate(testloader):
+                data = data.to(device)
+                out = shadow_model(data)
+                pred_4_nonmem = torch.cat([pred_4_nonmem, out])
+        pred_4_nonmem = pred_4_nonmem[1:unlearn_data_nums+1,:]
+        pred_4_nonmem = softmax(pred_4_nonmem,dim = 1)
+        pred_4_nonmem = pred_4_nonmem.cpu()
+        pred_4_nonmem = pred_4_nonmem.detach().numpy()
+        
+        
+        #构建MIA 攻击模型 
+        att_y = np.hstack((np.ones(pred_4_mem.shape[0]), np.zeros(pred_4_nonmem.shape[0])))
+        att_y = att_y.astype(np.int16)
+        
+        att_X = np.vstack((pred_4_mem, pred_4_nonmem))
+        # att_X.sort(axis=1)
+        
+        X_train, X_test, y_train, y_test = train_test_split(att_X, att_y, test_size = 0.1)
+        print(pred_4_mem.shape[0], pred_4_nonmem.shape[0])
+        # Create dataset instances
+        train_dataset = ShadowDataset(X_train, y_train)
+        test_dataset = ShadowDataset(X_test, y_test)
 
-          
+        # Now let's move on to creating the DataLoader.
+        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+        test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+        
+        from trainmodel.models import MLP
+        attacker = MLP(in_features=out.shape[1], num_classes=2, hidden_dim=64).to(self.device)
+        optimiz = torch.optim.Adam(params=attacker.parameters(), lr=self.learning_rate)
+        celoss = nn.CrossEntropyLoss()
+        
+        attacker.train()
+        for step in range(50):
+            for i, (x, y) in enumerate(train_loader):
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+                
+                output =attacker(x)
+                loss = celoss(output, y)
+                optimiz.zero_grad()
+                loss.backward()
+                optimiz.step()
+            if step%5 == 0:
+                print(f"In epoch {step}, the loss of the attacker is {loss}.")
+                
+        test_acc = test_num = 0
+        
+        attacker.eval() 
+        with torch.no_grad():
+            for x, y in test_loader:
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+                output = attacker(x)
+
+                test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                test_num += y.shape[0]
+
+        print("Test MIA Attacker test accuracy = {:.4f}".format(test_acc/test_num))
+        
+        return attacker
+            
             
 
     

@@ -140,6 +140,9 @@ class Crab(FedEraser):
         GM_list = []
         start_epoch = 0
         
+        if self.backdoor_attack:
+            print(f"Inject backdoor to target {self.idx_}.")
+        
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -148,7 +151,7 @@ class Crab(FedEraser):
             
 
             if i%self.eval_gap == 0:
-                print(f"\n-------------Round number: {i}-------------")
+                print(f"\n-------------FL Round number: {i}-------------")
                 print("\nEvaluate global model")
                 train_loss, _ = self.evaluate()
                 
@@ -175,9 +178,11 @@ class Crab(FedEraser):
                 start_epoch = i
                 # self.info_storage = ...
                 
-
             for client in self.selected_clients:
-                client.train()
+                if client in self.unlearn_clients and self.backdoor_attack:
+                    client.train(create_trigger=True)
+                else:
+                    client.train()
             
             self.save_client_model(i)
 
@@ -262,7 +267,7 @@ class Crab(FedEraser):
             self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
             print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
         
-        print(f"\n-------------After FedEraser-------------")
+        print(f"\n-------------After Crab-------------")
         print("\nEvaluate Eraser globel model")
         self.server_metrics()
         self.eraser_global_model = copy.deepcopy(self.new_GM)
