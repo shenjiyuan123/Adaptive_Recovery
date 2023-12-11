@@ -33,6 +33,7 @@ class Client(object):
         
         # self.create_trigger_id = args.create_trigger_id
         self.trigger_size = args.trigger_size
+        self.trim_percentage = args.trim_percentage
 
         # check BatchNorm
         self.has_BatchNorm = False
@@ -56,6 +57,60 @@ class Client(object):
             gamma=args.learning_rate_decay_gamma
         )
         self.learning_rate_decay = args.learning_rate_decay
+        
+    
+    def trim_weights(self, noise_std=0.1, trim_ratio=0.1):
+        """
+        对CNN模型的权重进行修剪。
+
+        :param model: 要修剪的模型。
+        :param k: 要修改的参数的百分比。
+        :param noise_std: 加入的高斯噪声的标准差。
+        :param trim_ratio: 要修剪的修改点的比例。
+        """
+        # 遍历所有参数并收集权重
+        model = self.model
+        k = self.trim_percentage
+        all_weights = []
+        for param in model.parameters():
+            if param.requires_grad:
+                all_weights.append(param.data.view(-1))
+
+        # 将所有权重合并成一个向量
+        all_weights = torch.cat(all_weights)
+        total_params = all_weights.numel()
+        # print(total_params)
+
+        # 随机选择k%的参数进行修改
+        num_modifications = int(total_params * k / 100)
+        indices = np.random.choice(total_params, num_modifications, replace=False)
+        
+        # 对选择的参数加入高斯噪声或替换为随机值
+        for idx in indices:
+            if np.random.rand() < 0.8:
+            # if True:
+                # 加入高斯噪声
+                all_weights[idx] += noise_std * torch.randn(1, device='cuda:0').item()
+            else:
+                # 替换为随机值
+                all_weights[idx] = noise_std * torch.rand(1, device='cuda:0')
+
+        # 修剪掉偏离量较大的修改
+        deviations = torch.abs(all_weights - all_weights.clone().detach())
+        trim_threshold = np.quantile(deviations.cpu().numpy(), 1 - trim_ratio)
+        trimmed_indices = deviations > trim_threshold
+        all_weights[trimmed_indices] = all_weights.clone().detach()[trimmed_indices]
+
+        # 将修剪后的权重应用到模型
+        idx = 0
+        for param in model.parameters():
+            if param.requires_grad:
+                numel = param.data.numel()
+                param.data = all_weights[idx:idx+numel].view(param.size())
+                idx += numel
+
+        return model
+
 
 
     def load_train_data(self, batch_size=None, create_trigger=False):
@@ -193,7 +248,7 @@ class clientAVG(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
 
-    def train(self, create_trigger=False):
+    def train(self, create_trigger=False, trim_attack=False):
         trainloader = self.load_train_data(create_trigger=create_trigger)
         # self.model.to(self.device)
         self.model.train()
@@ -226,6 +281,10 @@ class clientAVG(Client):
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
+        
+        if trim_attack:
+            self.model = self.trim_weights()
+        
         
     def train_one_step(self):
         trainloader = self.load_train_data()
@@ -264,7 +323,7 @@ class clientFedRecover(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
         
-    def train(self, create_trigger=False):
+    def train(self, create_trigger=False, trim_attack=False):
         trainloader = self.load_train_data(create_trigger=create_trigger)
         # self.model.to(self.device)
         self.model.train()
@@ -297,6 +356,9 @@ class clientFedRecover(Client):
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
+        
+        if trim_attack:
+            self.model = self.trim_weights()
         
         
     def retrain_with_LBFGS(self):

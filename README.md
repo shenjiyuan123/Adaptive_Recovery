@@ -22,24 +22,25 @@ python FedMoss.py       --algorithm Crab                \
                         --verify_unlearn                \
                         --dataset mnist                 \
                         --global_rounds 20              \
-                        --local_epochs 5                \
-                        --algorithm Crab                \    
-                        --verify_unlearn True           \    
+                        --local_epochs 5                \   
                         --num_clients 20                \    
                         --unlearn_clients_number 10     \     
 ```
-If you want to add the backdoor attack, need to add the argument `--backdoor_attack`.
+Currently, we offer two types of attack: 
+1. If you want to add the backdoor attack, need to add the argument `--backdoor_attack` and set the `--trigger_size`.
 
-Parameters:
+2. If you want to add the trim attack, need to add the argument `--trim_attack` and set the `trim_percentage`.
+
+Basic parameters:
 - `dataset`: The name of experiment dataset.
 - `global_rounds`: The communication rounds between clients and server.
 - `local_epochs`: The training epochs of each clients. 
-- `algorithm`: The recovery algorithm, can choose **Retrain, FedEraser, FedRecover and Crab**.
+- `algorithm`: The recovery algorithm, can choose **FedEraser, FedRecover and Crab**. The **Retrain** algorithm is already included in these three pipelines for fair comparison.
 - `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
 - `num_clients`: The total number of clients.
 - `unlearn_clients_number`: The targeted client number.
 
-
+    For more detailed parameters setting, you can check the `FedMoss.py`.
 
 ## Acknowledge
 This research is supported by the National Research Foundation, Singapore under its Strategic Capability Research Centres Funding Initiative. Any opinions, findings and conclusions or recommendations expressed in this material are those of the author(s) and do not reflect the views of National Research Foundation, Singapore.

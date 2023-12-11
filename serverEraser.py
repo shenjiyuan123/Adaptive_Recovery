@@ -34,6 +34,9 @@ class FedEraser(Server):
         # print(self.global_model.state_dict()['base.conv1.0.weight'][0])
         if self.backdoor_attack:
             print(f"Inject backdoor to target {self.idx_}.")
+        elif self.trim_attack:
+            print(f"Execute trim attack target {self.idx_}.")
+        
             
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -50,6 +53,8 @@ class FedEraser(Server):
             for client in self.selected_clients:
                 if client in self.unlearn_clients and self.backdoor_attack:
                     client.train(create_trigger=True)
+                elif client in self.unlearn_clients and self.trim_attack:
+                    client.train(trim_attack=True)
                 else:
                     client.train()
             

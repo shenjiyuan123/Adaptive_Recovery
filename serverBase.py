@@ -48,6 +48,7 @@ class Server(object):
         self.top_cnt = 100
         self.auto_break = args.auto_break
         self.backdoor_attack = args.backdoor_attack
+        self.trim_attack = args.trim_attack
 
         self.clients = []
         self.selected_clients = []

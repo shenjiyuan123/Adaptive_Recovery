@@ -200,8 +200,12 @@ if __name__ == "__main__":
                         help="Total number of unlearn clients")
     parser.add_argument('-backdoor', '--backdoor_attack', action='store_true', 
                     help="Whether to inject backdoor attack towards the target clients")
-    parser.add_argument('-trigger_size', type=int, default=4,
+    parser.add_argument('--trigger_size', type=int, default=4,
                         help="Size of injected trigger")
+    parser.add_argument('-trim', '--trim_attack', action='store_true', 
+                    help="Whether to execute trim attack towards the target clients")
+    parser.add_argument('--trim_percentage', type=int, default=10,
+                        help="Percentage of execute trim attack towards the target clients")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
