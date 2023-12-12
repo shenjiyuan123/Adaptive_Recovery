@@ -11,6 +11,7 @@ import time
 import random
 import scipy
 import json
+import wandb
 
 from serverBase import Server
 from clientBase import clientFedRecover
@@ -106,7 +107,10 @@ class FedRecover(Server):
             if i%self.eval_gap == 0:
                 print(f"\n-------------FedRecover Round number: {i}-------------")
                 print("\nEvaluate global model")
-                self.evaluate()
+                train_loss, test_acc = self.evaluate()
+                wandb.log({f'Train_loss/{self.algorithm}': train_loss}, step=i)
+                wandb.log({f'Test_acc/{self.algorithm}': test_acc}, step=i)
+            
                 # self.server_metrics()
                 
             # print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))

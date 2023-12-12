@@ -9,6 +9,7 @@ import numpy as np
 import torchvision
 import logging
 import torch.nn as nn
+import wandb
 
 from serverEraser import FedEraser
 from serverCrab import Crab
@@ -114,6 +115,12 @@ def run(args):
             raise NotImplementedError
 
         print(args.model)
+        
+        wandb.init(sync_tensorboard=False,
+               project="FedMoss",
+               job_type="CleanRepo",
+               config=args,
+               )
 
         # select algorithm
         if args.algorithm == "FedEraser":
@@ -135,7 +142,7 @@ def run(args):
             
             server.select_unlearned_clients()
             server.train()
-            server.retrain()
+            # server.retrain()
             server.recover()
         
         elif args.algorithm == "Crab":
@@ -183,7 +190,7 @@ if __name__ == "__main__":
                         help="Local learning rate")
     parser.add_argument('-ld', "--learning_rate_decay", type=bool, default=False)
     parser.add_argument('-ldg', "--learning_rate_decay_gamma", type=float, default=0.99)
-    parser.add_argument('-gr', "--global_rounds", type=int, default=20)
+    parser.add_argument('-gr', "--global_rounds", type=int, default=40)
     parser.add_argument('-ls', "--local_epochs", type=int, default=5,
                         help="Multiple update steps in one local epoch.")
     parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["FedEraser", "FedRecover", "Crab"],
@@ -204,7 +211,7 @@ if __name__ == "__main__":
                         help="Size of injected trigger")
     parser.add_argument('-trim', '--trim_attack', action='store_true', 
                     help="Whether to execute trim attack towards the target clients")
-    parser.add_argument('--trim_percentage', type=int, default=10,
+    parser.add_argument('--trim_percentage', type=int, default=20,
                         help="Percentage of execute trim attack towards the target clients")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")

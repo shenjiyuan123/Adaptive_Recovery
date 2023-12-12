@@ -7,6 +7,7 @@ import copy
 import time
 import random
 import json
+import wandb
 from pprint import pprint
 
 from dataset_utils import read_client_data
@@ -249,6 +250,10 @@ class Crab(FedEraser):
             
             self.old_clients = copy.deepcopy(self.old_CM)
             
+            print(f"\n-------------Crab Round number: {global_round}-------------")
+            train_loss, test_acc = self.evaluate()
+            wandb.log({f'Train_loss/{self.algorithm}': train_loss}, step=global_round)
+            wandb.log({f'Test_acc/{self.algorithm}': test_acc}, step=global_round)
             
             # 得到新的GM
             assert (len(self.old_CM) <= len(select_clients_in_round))

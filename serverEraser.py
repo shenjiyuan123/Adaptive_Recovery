@@ -5,6 +5,7 @@ import h5py
 import copy
 import time
 import random
+import wandb
 from pprint import pprint
 
 from dataset_utils import read_client_data
@@ -129,8 +130,12 @@ class FedEraser(Server):
                 # print(self.new_GM.state_dict()['base.conv1.0.weight'][0])
                 
                 continue
-                
             
+            print(f"\n-------------FedEraser Round number: {epoch}-------------")
+            train_loss, test_acc = self.evaluate()
+            wandb.log({f'Train_loss/{self.algorithm}': train_loss}, step=epoch)
+            wandb.log({f'Test_acc/{self.algorithm}': test_acc}, step=epoch)
+                
             # 得到新的CM，进行一步训练
             assert (len(self.remaining_clients) > 0)
             for client in self.remaining_clients:

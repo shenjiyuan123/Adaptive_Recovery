@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from MIA_utils import ShadowDataset
 from torch.utils.data import DataLoader
+import wandb
 
 from clientBase import clientAVG
 from dataset_utils import read_client_data
@@ -388,6 +389,8 @@ class Server(object):
         # self.print_(test_acc, train_acc, train_loss)
         print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
         print("Std Test AUC: {:.4f}".format(np.std(aucs)))
+        
+        return train_loss, test_acc
 
     def print_(self, test_acc, test_auc, train_loss):
         print("Average Test Accurancy: {:.4f}".format(test_acc))
@@ -493,21 +496,24 @@ class Server(object):
         # self.FL_global_model = torch.load('models/10_2/FedAvg_server.pt')
         # self.retrain_global_model = torch.load('models/9_2/FedAvg_server.pt')
         
-        print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.retrain_global_model.state_dict()['base.conv1.0.weight'][-1])
-        print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.eraser_global_model.state_dict()['base.conv1.0.weight'][-1])
+        # print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.retrain_global_model.state_dict()['base.conv1.0.weight'][-1])
+        # print(self.FL_global_model.state_dict()['base.conv1.0.weight'][-1] - self.eraser_global_model.state_dict()['base.conv1.0.weight'][-1])
         
         del self.remaining_clients
         
         attacker = self.build_MIA_attacker()
-        # attacker = self.train_attack()
-        print("\n-------------MIA evaluation against Standard FL-------------")
-        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
+        # attacker = self.train_attack()  # use NN to get the attack model
+        if self.FL_global_model:
+            print("\n-------------MIA evaluation against Standard FL-------------")
+            (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
         
-        print("\n-------------MIA evaluation against FL Unlearn-------------")
-        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
+        if self.eraser_global_model:
+            print("\n-------------MIA evaluation against FL Unlearn-------------")
+            (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
         
-        print("\n-------------MIA evaluation against FL Retrain-------------")
-        (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.retrain_global_model)
+        if self.retrain_global_model:
+            print("\n-------------MIA evaluation against FL Retrain-------------")
+            (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.retrain_global_model)
         
         
     def build_MIA_attacker(self):
@@ -717,6 +723,9 @@ class Server(object):
                 print(f"\n-------------Retrain Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
+                train_loss, test_acc = self.evaluate()
+                wandb.log({'Train_loss/Retrain': train_loss}, step=i)
+                wandb.log({'Test_acc/Retrain': test_acc}, step=i)
                 # self.server_metrics()
                 
             # print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))
