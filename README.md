@@ -1,4 +1,4 @@
-# Crab: Towards Efficient and Certified Recovery from Poisoning Attacks in Federated Learning
+# Crab 🦀️ : Towards Efficient and Certified Recovery from Poisoning Attacks in Federated Learning
 
 ## About The Project
 Official implementation of paper Crab. Crab can achieve efficient recovery from poisoning attacks through (i) selective storage of essential historical global models and clients' gradients rather than all historical information, and (ii) adaptive rollback to a global model that has not been significantly affected by the malicious clients rather than the initial model. 
@@ -7,9 +7,9 @@ Official implementation of paper Crab. Crab can achieve efficient recovery from 
 For example, if want to generate the MNIST, you can use
 ```
 python generate_mnist.py iid - -                # for iid and unbalanced scenario
-# python generate_mnist.py iid balance -        # for iid and balanced scenario
-# python generate_mnist.py noniid - pat         # for pathological noniid and unbalanced scenario   
-# python generate_mnist.py noniid - dir         # for practical noniid and unbalanced scenario
+python generate_mnist.py iid balance -          # for iid and balanced scenario
+python generate_mnist.py noniid - pat           # for pathological noniid and unbalanced scenario   
+python generate_mnist.py noniid - dir           # for practical noniid and unbalanced scenario
 ```
 Note: the split file of train/test is 'add' mode, so notice to delete the original split files if you want to re-split the dataset.
 
@@ -35,7 +35,7 @@ Basic parameters:
 - `dataset`: The name of experiment dataset.
 - `global_rounds`: The communication rounds between clients and server.
 - `local_epochs`: The training epochs of each clients. 
-- `algorithm`: The recovery algorithm, can choose **FedEraser, FedRecover and Crab**. The **Retrain** algorithm is already included in these three pipelines for fair comparison.
+- `algorithm`: The recovery algorithm, can choose **Retrain, FedEraser, FedRecover and Crab**.
 - `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
 - `num_clients`: The total number of clients.
 - `unlearn_clients_number`: The targeted client number.
