@@ -90,6 +90,7 @@ class FedRecover(Server):
         for client in self.remaining_clients:
             client.set_parameters(self.global_model)
         # print(self.global_model.state_dict()['base.conv1.0.weight'][0])
+        prev_train_loss = 10
 
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -112,6 +113,11 @@ class FedRecover(Server):
                 wandb.log({f'Test_acc/{self.algorithm}': test_acc}, step=i)
             
                 # self.server_metrics()
+            
+            if train_loss > prev_train_loss:
+                self.load_model()
+                print('load global again.')
+            prev_train_loss = train_loss    
                 
             # print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))
             for client in self.remaining_clients:
@@ -119,7 +125,7 @@ class FedRecover(Server):
 
             self.receive_retrained_models(self.remaining_clients)
             self.aggregate_parameters()
-            print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
+            # print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])

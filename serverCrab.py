@@ -20,6 +20,56 @@ class Crab(FedEraser):
 
         # 'client_selection': []
         self.info_storage = {}
+        self.new_CM = []
+    
+
+    def test_metrics(self):
+        if self.eval_new_clients and self.num_new_clients > 0:
+            self.fine_tuning_new_clients()
+            return self.test_metrics_new_clients()
+        
+        num_samples = []
+        tot_correct = []
+        tot_auc = []
+        if self.new_CM != []:
+            for c in self.new_CM:
+                ct, ns, auc = c.test_metrics()
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
+            ids = [c.id for c in self.new_CM]
+        else:
+            for c in self.remaining_clients:
+                ct, ns, auc = c.test_metrics()
+                tot_correct.append(ct*1.0)
+                tot_auc.append(auc*ns)
+                num_samples.append(ns)
+            ids = [c.id for c in self.remaining_clients]
+
+        return ids, num_samples, tot_correct, tot_auc
+
+    def train_metrics(self):
+        if self.eval_new_clients and self.num_new_clients > 0:
+            return [0], [1], [0]
+        
+        num_samples = []
+        losses = []
+        if self.new_CM != []:
+            for c in self.new_CM:
+                cl, ns = c.train_metrics()
+                num_samples.append(ns)
+                losses.append(cl*1.0)
+
+            ids = [c.id for c in self.new_CM]
+        else:
+            for c in self.remaining_clients:
+                cl, ns = c.train_metrics()
+                num_samples.append(ns)
+                losses.append(cl*1.0)
+
+            ids = [c.id for c in self.remaining_clients]
+
+        return ids, num_samples, losses
     
     def evaluate(self, acc=None, loss=None):
         stats = self.test_metrics()
@@ -249,11 +299,7 @@ class Crab(FedEraser):
             print([c.id for c in self.old_CM])
             
             self.old_clients = copy.deepcopy(self.old_CM)
-            
-            print(f"\n-------------Crab Round number: {global_round}-------------")
-            train_loss, test_acc = self.evaluate()
-            wandb.log({f'Train_loss/{self.algorithm}': train_loss}, step=global_round)
-            wandb.log({f'Test_acc/{self.algorithm}': test_acc}, step=global_round)
+        
             
             # 得到新的GM
             assert (len(self.old_CM) <= len(select_clients_in_round))
@@ -272,12 +318,21 @@ class Crab(FedEraser):
                 client.train_one_step()
             self.new_CM = copy.deepcopy(self.old_clients)
             
+            print(f"\n-------------Crab Round number: {global_round}-------------")
+            
+            # test_acc, test_loss = self.server_metrics()
+            # wandb.log({f'Train_loss/{self.algorithm}': test_loss}, step=global_round)
+            train_loss, test_acc = self.evaluate()
+            wandb.log({f'Train_loss/{self.algorithm}': train_loss}, step=global_round)
+            wandb.log({f'Test_acc/{self.algorithm}': test_acc}, step=global_round)
+            
             # 开始校准
             self.new_GM = self.unlearning_step_once(self.old_CM, self.new_CM, self.old_GM, self.new_GM)
-            print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
+            # print("new GM after calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
         
         print(f"\n-------------After Crab-------------")
         print("\nEvaluate Eraser globel model")
         self.server_metrics()
         self.eraser_global_model = copy.deepcopy(self.new_GM)
+        self.new_CM = []
 

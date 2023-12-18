@@ -110,6 +110,34 @@ def run(args):
             # args.model = mobilenet_v2(pretrained=True).to(args.device)
             # feature_dim = list(args.model.fc.parameters())[0].shape[1]
             # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
+        
+        elif model_str == "lstm":
+            args.model = LSTMNet(hidden_dim=emb_dim, vocab_size=vocab_size, num_classes=args.num_classes).to(args.device)
+
+        elif model_str == "bilstm":
+            args.model = BiLSTM_TextClassification(input_size=vocab_size, hidden_size=emb_dim, output_size=args.num_classes, 
+                        num_layers=1, embedding_dropout=0, lstm_dropout=0, attention_dropout=0, 
+                        embedding_length=emb_dim).to(args.device)
+            
+        elif model_str == "fastText":
+            args.model = fastText(hidden_dim=emb_dim, vocab_size=vocab_size, num_classes=args.num_classes).to(args.device)
+
+        elif model_str == "TextCNN":
+            args.model = TextCNN(hidden_dim=emb_dim, max_len=max_len, vocab_size=vocab_size, 
+                            num_classes=args.num_classes).to(args.device)
+
+        elif model_str == "Transformer":
+            args.model = TransformerModel(ntoken=vocab_size, d_model=emb_dim, nhead=8, d_hid=emb_dim, nlayers=2, 
+                            num_classes=args.num_classes).to(args.device)
+        
+        elif model_str == "AmazonMLP":
+            args.model = AmazonMLP().to(args.device)
+
+        elif model_str == "harcnn":
+            if args.dataset == 'har':
+                args.model = HARCNN(9, dim_hidden=1664, num_classes=args.num_classes, conv_kernel_size=(1, 9), pool_kernel_size=(1, 2)).to(args.device)
+            elif args.dataset == 'pamap':
+                args.model = HARCNN(9, dim_hidden=3712, num_classes=args.num_classes, conv_kernel_size=(1, 9), pool_kernel_size=(1, 2)).to(args.device)
             
         else:
             raise NotImplementedError
@@ -130,9 +158,9 @@ def run(args):
             server = FedEraser(args, i)
             
             server.select_unlearned_clients()
-            server.train()
+            # server.train()
             server.unlearning()
-            server.retrain()
+            # server.retrain()
             
         elif args.algorithm == "FedRecover":
             args.head = copy.deepcopy(args.model.fc)
@@ -141,7 +169,7 @@ def run(args):
             server = FedRecover(args, i)
             
             server.select_unlearned_clients()
-            server.train()
+            # server.train()
             # server.retrain()
             server.recover()
         
@@ -154,6 +182,16 @@ def run(args):
             server.select_unlearned_clients()
             server.train_with_select()
             server.adaptive_recover()
+            # server.retrain()
+            
+        elif args.algorithm == "Retrain":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = FedEraser(args, i)
+            
+            server.select_unlearned_clients()
+            # server.train()
             server.retrain()
             
         else:
@@ -193,7 +231,7 @@ if __name__ == "__main__":
     parser.add_argument('-gr', "--global_rounds", type=int, default=40)
     parser.add_argument('-ls', "--local_epochs", type=int, default=5,
                         help="Multiple update steps in one local epoch.")
-    parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["FedEraser", "FedRecover", "Crab"],
+    parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["Retrain", "FedEraser", "FedRecover", "Crab"],
                         help="How to unlearn the target clients")
     parser.add_argument('-verify', "--verify_unlearn", action='store_true',
                         help="Whether use the MIA or backdoor to verify the unlearn effectiveness")

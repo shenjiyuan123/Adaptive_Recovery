@@ -33,9 +33,8 @@ class Server(object):
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.initial_model = copy.deepcopy(args.model)
-        # print("initial:", self.initial_model.state_dict()['base.conv1.0.weight'][0])
         self.global_model = copy.deepcopy(args.model)
-        self.total_clients = len(os.listdir('data/mnist/test'))
+        self.total_clients = len(os.listdir(os.path.join('./data', self.dataset, 'test/')))
         self.num_clients = args.num_clients
         self.join_ratio = args.join_ratio
         self.random_join_ratio = args.random_join_ratio
@@ -271,6 +270,7 @@ class Server(object):
     def server_metrics(self):
         import dataset_utils
         from torch.utils.data import DataLoader
+        import torch.nn as nn
         from sklearn.preprocessing import label_binarize
         from sklearn import metrics
         testdata = dataset_utils.read_all_test_data(self.dataset, self.total_clients)
@@ -282,6 +282,9 @@ class Server(object):
         y_prob = []
         y_true = []
         
+        celoss = nn.CrossEntropyLoss()
+        losses = []
+        
         with torch.no_grad():
             for x, y in testloader:
                 if type(x) == type([]):
@@ -290,6 +293,9 @@ class Server(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.global_model(x)
+                
+                loss = celoss(output, y)
+                losses.append(loss.item())
 
                 test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
                 test_num += y.shape[0]
@@ -308,11 +314,13 @@ class Server(object):
         acc = test_acc / test_num
         y_prob = np.concatenate(y_prob, axis=0)
         y_true = np.concatenate(y_true, axis=0)
+        l = sum(losses)/len(losses)
 
         auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
         print("Average Test Accurancy: {:.4f}".format(acc))
         print("Average Test AUC: {:.4f}".format(auc))
-        return acc, acc
+        print("Average Test Loss: {:.4f}".format(l))
+        return acc, l
 
     def test_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -507,11 +515,11 @@ class Server(object):
             print("\n-------------MIA evaluation against Standard FL-------------")
             (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.FL_global_model)
         
-        if self.eraser_global_model:
+        if self.algorithm != "Retrain":
             print("\n-------------MIA evaluation against FL Unlearn-------------")
             (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.eraser_global_model)
         
-        if self.retrain_global_model:
+        else:
             print("\n-------------MIA evaluation against FL Retrain-------------")
             (ACC_unlearn, PRE_unlearn) = self.MIA_attack(attacker, self.retrain_global_model)
         
@@ -525,7 +533,8 @@ class Server(object):
         shadow_model = self.FL_global_model
         n_class_dict = dict()
         n_class_dict['mnist'] = 10
-        n_class_dict['cifar10'] = 10
+        n_class_dict['Cifar10'] = 10
+        n_class_dict['agnews'] = 4
         
         N_class = n_class_dict[self.dataset]
         
@@ -627,7 +636,8 @@ class Server(object):
         
         n_class_dict = dict()
         n_class_dict['mnist'] = 10
-        n_class_dict['cifar10'] = 10
+        n_class_dict['Cifar10'] = 10
+        n_class_dict['agnews'] = 4
         
         N_class = n_class_dict[self.dataset]
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -704,7 +714,7 @@ class Server(object):
         self.global_model = copy.deepcopy(self.initial_model)
         for client in self.remaining_clients:
             client.set_parameters(self.global_model)
-        print(self.global_model.state_dict()['base.conv1.0.weight'][0])
+        # print(self.global_model.state_dict()['base.conv1.0.weight'][0])
 
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -722,7 +732,6 @@ class Server(object):
             if i%self.eval_gap == 0:
                 print(f"\n-------------Retrain Round number: {i}-------------")
                 print("\nEvaluate global model")
-                self.evaluate()
                 train_loss, test_acc = self.evaluate()
                 wandb.log({'Train_loss/Retrain': train_loss}, step=i)
                 wandb.log({'Test_acc/Retrain': test_acc}, step=i)
@@ -734,7 +743,7 @@ class Server(object):
 
             self.receive_retrained_models(self.remaining_clients)
             self.aggregate_parameters()
-            print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
+            # print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
