@@ -51,8 +51,8 @@ class Client(object):
         self.dp_sigma = args.dp_sigma
 
         self.loss = nn.CrossEntropyLoss()
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
             gamma=args.learning_rate_decay_gamma
@@ -193,6 +193,8 @@ class Client(object):
 
         train_num = 0
         losses = 0
+        ter = 0
+        
         with torch.no_grad():
             for x, y in trainloader:
                 if type(x) == type([]):
@@ -201,6 +203,10 @@ class Client(object):
                     x = x.to(self.device)
                 y = y.to(self.device)
                 output = self.model(x)
+                
+                # TSR: test error rate
+                ter += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                
                 loss = self.loss(output, y)
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
@@ -208,7 +214,8 @@ class Client(object):
         # self.model.cpu()
         # self.save_model(self.model, 'model')
 
-        return losses, train_num
+
+        return ter, losses, train_num
 
     # def get_next_train_batch(self):
     #     try:
@@ -363,7 +370,7 @@ class clientFedRecover(Client):
         
         
     def retrain_with_LBFGS(self):
-        self.optimizer = torch.optim.LBFGS(params = self.model.parameters(), lr=self.learning_rate, history_size=2, max_iter=4)
+        self.optimizer = torch.optim.LBFGS(params = self.model.parameters(), lr=self.learning_rate, history_size=1, max_iter=4)
         trainloader = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()

@@ -79,6 +79,7 @@ class Server(object):
         self.fine_tuning_epoch = args.fine_tuning_epoch
         
         self.remaining_clients = []
+        self.FL_global_model = []
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -227,6 +228,11 @@ class Server(object):
         assert (os.path.exists(model_path))
         self.global_model = torch.load(model_path)
             
+    def load_epoch_GModel(self, epoch):
+        model_path = os.path.join("server_models", self.dataset)
+        model_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
+        assert (os.path.exists(model_path))
+        self.global_model = torch.load(model_path)
 
     def model_exists(self):
         model_path = os.path.join("server_models", self.dataset)
@@ -349,31 +355,54 @@ class Server(object):
 
     def train_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
-            return [0], [1], [0]
+            return [0], [1], [0], [0]
         
         num_samples = []
         losses = []
+        asrs = []
         if not self.remaining_clients:
             for c in self.clients:
-                cl, ns = c.train_metrics()
+                casr, cl, ns = c.train_metrics()
                 num_samples.append(ns)
                 losses.append(cl*1.0)
+                asrs.append(casr*1.0)
 
             ids = [c.id for c in self.clients]
         else:
             for c in self.remaining_clients:
-                cl, ns = c.train_metrics()
+                casr, cl, ns = c.train_metrics()
                 num_samples.append(ns)
                 losses.append(cl*1.0)
+                asrs.append(casr*1.0)
 
             ids = [c.id for c in self.remaining_clients]
 
-        return ids, num_samples, losses
+        return ids, num_samples, losses, asrs
+    
+    def target_metrics(self):
+        if self.eval_new_clients and self.num_new_clients > 0:
+            return [0], [1], [0], [0]
+        
+        num_samples = []
+        losses = []
+        asrs = []
+        if self.remaining_clients:
+            for c in self.unlearn_clients:
+                casr, cl, ns = c.train_metrics()
+                num_samples.append(ns)
+                losses.append(cl*1.0)
+                asrs.append(casr*1.0)
+
+            ids = [c.id for c in self.clients]
+        return ids, num_samples, losses, asrs
 
     # evaluate selected clients
     def evaluate(self, acc=None, loss=None):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
+        if self.remaining_clients:
+            stats_target = self.target_metrics()
+            train_asr = sum(stats_target[3])*1.0 / sum(stats_target[1])
 
         test_acc = sum(stats[2])*1.0 / sum(stats[1])
         test_auc = sum(stats[3])*1.0 / sum(stats[1])
@@ -392,6 +421,8 @@ class Server(object):
             loss.append(train_loss)
 
         print("Averaged Train Loss: {:.4f}".format(train_loss))
+        if self.remaining_clients:
+            print("Averaged Attack success rate: {:.4f}".format(train_asr))
         print("Averaged Test Accurancy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
         # self.print_(test_acc, train_acc, train_loss)
@@ -530,10 +561,15 @@ class Server(object):
         from sklearn.model_selection import train_test_split
         from sklearn.metrics import accuracy_score, precision_score, recall_score
         
-        shadow_model = self.FL_global_model
+        
+        if self.FL_global_model != []:
+            shadow_model = self.FL_global_model
+        else:
+            self.FL_global_model = shadow_model = torch.load(os.path.join('server_models', self.dataset, self.algorithm + "_epoch_" + str(self.global_rounds) + ".pt"))
         n_class_dict = dict()
         n_class_dict['mnist'] = 10
         n_class_dict['Cifar10'] = 10
+        n_class_dict['fmnist'] = 10
         n_class_dict['agnews'] = 4
         
         N_class = n_class_dict[self.dataset]
@@ -637,6 +673,7 @@ class Server(object):
         n_class_dict = dict()
         n_class_dict['mnist'] = 10
         n_class_dict['Cifar10'] = 10
+        n_class_dict['fmnist'] = 10
         n_class_dict['agnews'] = 4
         
         N_class = n_class_dict[self.dataset]

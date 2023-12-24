@@ -54,18 +54,21 @@ class Crab(FedEraser):
         
         num_samples = []
         losses = []
+        asrs = []
         if self.new_CM != []:
             for c in self.new_CM:
-                cl, ns = c.train_metrics()
+                casr, cl, ns = c.train_metrics()
                 num_samples.append(ns)
                 losses.append(cl*1.0)
+                asrs.append(casr*1.0)
 
             ids = [c.id for c in self.new_CM]
         else:
             for c in self.remaining_clients:
-                cl, ns = c.train_metrics()
+                casr, cl, ns = c.train_metrics()
                 num_samples.append(ns)
                 losses.append(cl*1.0)
+                asrs.append(casr*1.0)
 
             ids = [c.id for c in self.remaining_clients]
 
@@ -74,6 +77,9 @@ class Crab(FedEraser):
     def evaluate(self, acc=None, loss=None):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
+        if self.remaining_clients:
+            stats_target = self.target_metrics()
+            train_asr = sum(stats_target[3])*1.0 / sum(stats_target[1])
 
         test_acc = sum(stats[2])*1.0 / sum(stats[1])
         test_auc = sum(stats[3])*1.0 / sum(stats[1])
@@ -92,6 +98,8 @@ class Crab(FedEraser):
             loss.append(train_loss)
 
         print("Averaged Train Loss: {:.4f}".format(train_loss))
+        if self.remaining_clients:
+            print("Averaged Attack success rate: {:.4f}".format(train_asr))
         print("Averaged Test Accurancy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
         print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
@@ -160,7 +168,7 @@ class Crab(FedEraser):
         CM = self.load_client_model(round)
         CM_list = [c.model for c in CM]
         CM_list = self.model_to_traj(CM_list)
-        k = int(len(CM) * 0.5)
+        k = int(len(CM) * 0.7)
         target_GM = GM_list[round - start_epoch] # GM_list 的下标是根据每一个 buffer window 从0开始索引的
         target_GM = [p.detach().clone() for p in target_GM.parameters()]
 
@@ -213,7 +221,7 @@ class Crab(FedEraser):
             else:
                 GM_list.append(copy.deepcopy(self.global_model))
                 
-            if train_loss < start_loss * (1 - alpha):
+            if train_loss < start_loss * (1 - alpha) or i == self.global_rounds:
             # if i%5==0:
                 print("*****")
                 rounds = self.select_round(start_epoch, GM_list)

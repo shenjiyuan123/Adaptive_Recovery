@@ -115,7 +115,7 @@ class FedRecover(Server):
                 # self.server_metrics()
             
             if train_loss > prev_train_loss:
-                self.load_model()
+                self.load_epoch_GModel(i)
                 print('load global again.')
             prev_train_loss = train_loss    
                 
