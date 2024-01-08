@@ -158,7 +158,7 @@ def run(args):
             server = FedEraser(args, i)
             
             server.select_unlearned_clients()
-            # server.train()
+            server.train()
             server.unlearning()
             # server.retrain()
             
@@ -169,7 +169,7 @@ def run(args):
             server = FedRecover(args, i)
             
             server.select_unlearned_clients()
-            # server.train()
+            server.train()
             # server.retrain()
             server.recover()
         
@@ -191,7 +191,7 @@ def run(args):
             server = FedEraser(args, i)
             
             server.select_unlearned_clients()
-            # server.train()
+            server.train()
             server.retrain()
             
         else:
@@ -235,6 +235,8 @@ if __name__ == "__main__":
                         help="How to unlearn the target clients")
     parser.add_argument('-verify', "--verify_unlearn", action='store_true',
                         help="Whether use the MIA or backdoor to verify the unlearn effectiveness")
+    parser.add_argument('-Prounds', "--select_round_ratio", type=float, default=0.5)
+    parser.add_argument('-Xclients', "--select_client_ratio", type=float, default=0.7)
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,

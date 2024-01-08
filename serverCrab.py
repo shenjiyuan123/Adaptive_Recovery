@@ -21,6 +21,8 @@ class Crab(FedEraser):
         # 'client_selection': []
         self.info_storage = {}
         self.new_CM = []
+        self.P_rounds = args.select_round_ratio
+        self.X_clients = args.select_client_ratio
     
 
     def test_metrics(self):
@@ -121,6 +123,7 @@ class Crab(FedEraser):
         for model in GM_list:
             timestamp = []
             timestamp.extend([p.detach().clone() for p in model.parameters()])
+            # print(sum(p.numel() for p in model.parameters()))
             traj.append(timestamp)
         return traj
     
@@ -134,7 +137,7 @@ class Crab(FedEraser):
         Returns:
             list: 返回需要选取的 epoch 轮数
         """
-        k = int(len(GM_list) * 0.5) 
+        k = int(len(GM_list) * self.P_rounds) 
         GM_trajectory = self.model_to_traj(GM_list)
         prior = GM_trajectory[0]
         kl_list = []
@@ -168,7 +171,7 @@ class Crab(FedEraser):
         CM = self.load_client_model(round)
         CM_list = [c.model for c in CM]
         CM_list = self.model_to_traj(CM_list)
-        k = int(len(CM) * 0.7)
+        k = int(len(CM) * self.X_clients)
         target_GM = GM_list[round - start_epoch] # GM_list 的下标是根据每一个 buffer window 从0开始索引的
         target_GM = [p.detach().clone() for p in target_GM.parameters()]
 
