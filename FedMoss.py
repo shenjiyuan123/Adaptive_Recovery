@@ -235,7 +235,7 @@ if __name__ == "__main__":
                         help="How to unlearn the target clients")
     parser.add_argument('-verify', "--verify_unlearn", action='store_true',
                         help="Whether use the MIA or backdoor to verify the unlearn effectiveness")
-    parser.add_argument('-Prounds', "--select_round_ratio", type=float, default=0.5)
+    parser.add_argument('-Prounds', "--select_round_ratio", type=float, default=0.6)
     parser.add_argument('-Xclients', "--select_client_ratio", type=float, default=0.7)
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")

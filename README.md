@@ -21,15 +21,17 @@ For example, to execute the `Crab` recovery simulation, run the following comman
 python FedMoss.py       --algorithm Crab                \
                         --verify_unlearn                \
                         --dataset mnist                 \
-                        --global_rounds 20              \
+                        --global_rounds 40              \
                         --local_epochs 5                \   
                         --num_clients 20                \    
-                        --unlearn_clients_number 10     \     
+                        --unlearn_clients_number 10     \   
+                        --select_round_ratio 0.6        \
+                        --select_client_ratio 0.7       \  
 ```
 Currently, we offer two types of attack: 
-1. If you want to add the backdoor attack, need to add the argument `--backdoor_attack` and set the `--trigger_size`.
+1. If you want to add the backdoor attack, need to add the argument `--backdoor_attack` and set the `--trigger_size 4`.
 
-2. If you want to add the trim attack, need to add the argument `--trim_attack` and set the `trim_percentage`.
+2. If you want to add the trim attack, need to add the argument `--trim_attack` and set the `--trim_percentage 20`.
 
 Basic parameters:
 - `dataset`: The name of experiment dataset.
@@ -39,6 +41,8 @@ Basic parameters:
 - `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
 - `num_clients`: The total number of clients.
 - `unlearn_clients_number`: The targeted client number.
+- `select_round_ratio`: The ratio of total round number selected in each time window.
+- `select_client_ratio`: The ratio of total client number selected for each selected model.
 
     For more detailed parameters setting, you can check the `FedMoss.py`.
 
