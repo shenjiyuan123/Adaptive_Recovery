@@ -281,7 +281,7 @@ class Crab(FedEraser):
             
         self.save_results()
         # self.save_global_model()
-        self.server_metrics()
+        # self.server_metrics()
         self.FL_global_model = copy.deepcopy(self.global_model)
 
 
@@ -343,7 +343,7 @@ class Crab(FedEraser):
         
         print(f"\n-------------After Crab-------------")
         print("\nEvaluate Eraser globel model")
-        self.server_metrics()
+        # self.server_metrics()
         self.eraser_global_model = copy.deepcopy(self.new_GM)
         self.new_CM = []
 

@@ -201,6 +201,20 @@ def read_data(dataset, idx, is_train=True):
     
 def read_all_test_data(dataset, range_idx):
     test_data_dir = os.path.join('./data', dataset, 'test/')
+    if dataset[:2] == "ag" or dataset[:2] == "SS":
+        for idx in range(range_idx):
+            test_data = read_data(dataset, idx, False)
+            X_test, X_test_lens = list(zip(*test_data['x']))
+            y_test = test_data['y']
+
+            X_test = torch.Tensor(X_test).type(torch.int64)
+            X_test_lens = torch.Tensor(X_test_lens).type(torch.int64)
+            y_test = torch.Tensor(test_data['y']).type(torch.int64)
+            if idx == 0:
+                raw_test_data = [((x, lens), y) for x, lens, y in zip(X_test, X_test_lens, y_test)]
+            else:
+                raw_test_data.extend([((x, lens), y) for x, lens, y in zip(X_test, X_test_lens, y_test)])
+        return raw_test_data
     
     for i in range(range_idx):
         test_file = test_data_dir + str(i) + '.npz'
@@ -229,7 +243,6 @@ def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_
 
     if is_train:
         train_data = read_data(dataset, idx, is_train)
-        print(train_data['x'], train_data['x'].dtype)
         X_train = torch.Tensor(train_data['x']).type(torch.float32)
         y_train = torch.Tensor(train_data['y']).type(torch.int64)
 

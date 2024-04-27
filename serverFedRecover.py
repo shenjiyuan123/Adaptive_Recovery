@@ -79,7 +79,7 @@ class FedRecover(Server):
 
         self.save_results()
         # self.save_global_model()
-        self.server_metrics()
+        # self.server_metrics()
         self.FL_global_model = copy.deepcopy(self.global_model)
 
 
@@ -142,7 +142,7 @@ class FedRecover(Server):
 
         self.save_results()
         self.save_global_model()
-        self.server_metrics()
+        # self.server_metrics()
         self.eraser_global_model = copy.deepcopy(self.global_model)
 
 

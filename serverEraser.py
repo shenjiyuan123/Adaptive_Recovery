@@ -80,7 +80,7 @@ class FedEraser(Server):
 
         self.save_results()
         # self.save_global_model()
-        self.server_metrics()
+        # self.server_metrics()
         self.FL_global_model = copy.deepcopy(self.global_model)
 
         if self.num_new_clients > 0:
@@ -155,7 +155,7 @@ class FedEraser(Server):
         
         print(f"\n-------------After FedEraser-------------")
         print("\nEvaluate Eraser globel model")
-        self.server_metrics()
+        # self.server_metrics()
         self.eraser_global_model = copy.deepcopy(self.new_GM)
             
     

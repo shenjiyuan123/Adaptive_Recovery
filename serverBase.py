@@ -279,6 +279,7 @@ class Server(object):
         import torch.nn as nn
         from sklearn.preprocessing import label_binarize
         from sklearn import metrics
+        
         testdata = dataset_utils.read_all_test_data(self.dataset, self.total_clients)
         testloader = DataLoader(testdata, self.batch_size, drop_last=False, shuffle=True)
         self.global_model.eval()
@@ -590,7 +591,10 @@ class Server(object):
                 else:
                     data_loader = client.load_train_data()
                 for batch_idx, (data, target) in enumerate(data_loader):
-                    data = data.to(device)
+                    if type(data) == type([]):
+                        data[0] = data[0].to(self.device)
+                    else:
+                        data = data.to(device)
                     out = shadow_model(data)
                     pred_4_mem = torch.cat([pred_4_mem, out])
             # for client in self.remaining_clients:
@@ -614,7 +618,10 @@ class Server(object):
         pred_4_nonmem = pred_4_nonmem.to(device)
         with torch.no_grad():
             for batch, (data, target) in enumerate(testloader):
-                data = data.to(device)
+                if type(data) == type([]):
+                    data[0] = data[0].to(self.device)
+                else:
+                    data = data.to(device)
                 out = shadow_model(data)
                 pred_4_nonmem = torch.cat([pred_4_nonmem, out])
         pred_4_nonmem = pred_4_nonmem[1:unlearn_data_nums+1,:]
@@ -692,7 +699,10 @@ class Server(object):
                 else:
                     data_loader = self.unlearn_clients[ii].load_train_data()
                 for batch, (data, target) in enumerate(data_loader):
-                    data = data.to(device)
+                    if type(data) == type([]):
+                        data[0] = data[0].to(self.device)
+                    else:
+                        data = data.to(device)
                     out = target_model(data)
                     unlearn_X = torch.cat([unlearn_X, out])
                         
@@ -715,7 +725,10 @@ class Server(object):
         testloader = torch.utils.data.DataLoader(testset, self.batch_size, drop_last=False, shuffle=True)
         with torch.no_grad():
             for _, (data, target) in enumerate(testloader):
-                data = data.to(device)
+                if type(data) == type([]):
+                    data[0] = data[0].to(self.device)
+                else:
+                    data = data.to(device)
                 out = target_model(data)
                 test_X = torch.cat([test_X, out])
             
@@ -797,7 +810,7 @@ class Server(object):
 
         self.save_results()
         self.save_global_model()
-        self.server_metrics()
+        # self.server_metrics()
         self.retrain_global_model = copy.deepcopy(self.global_model)
 
         if self.num_new_clients > 0:
