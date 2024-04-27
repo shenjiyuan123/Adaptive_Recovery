@@ -3,6 +3,8 @@
 ## About The Project
 Official implementation of paper Crab. Crab can achieve efficient recovery from poisoning attacks through (i) selective storage of essential historical global models and clients' gradients rather than all historical information, and (ii) adaptive rollback to a global model that has not been significantly affected by the malicious clients rather than the initial model. 
 
+<center><img src="assets/workflow1.png" style="zoom: 80%;" /></center>
+
 ## Generate the dataset
 For example, if want to generate the MNIST, you can use
 ```
