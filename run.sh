@@ -17,6 +17,9 @@
 # python FedMoss.py -data Cifar10 -verify -algo FedRecover -unlearn 10
 # python FedMoss.py -data Cifar10 -verify -algo Crab -unlearn 10
 
+# agnews
+# python FedMoss.py -verify -algo Retrain -unlearn 5 -data agnews -m TextCNN -gr 1 --num_classes 4
+
 # backdoor 
 # python FedMoss.py -verify -algo Retrain -data Cifar10 -unlearn 2 -backdoor -gr 15
 # python FedMoss.py -verify -algo FedEraser -data Cifar10 -unlearn 2 -backdoor -gr 15
@@ -41,4 +44,8 @@ python FedMoss.py -data fmnist -verify -algo Crab -unlearn 10 -Xclients 0.6 -gr 
 python FedMoss.py -data fmnist -verify -algo Crab -unlearn 10 -Xclients 0.8 -gr 15 -backdoor
 python FedMoss.py -data fmnist -verify -algo Crab -unlearn 10 -Xclients 0.9 -gr 15 -backdoor
 python FedMoss.py -data fmnist -verify -algo Crab -unlearn 10 -Xclients 1.0 -gr 15 -backdoor
+
+# TrimmedMean Aggregation
+python FedMoss.py -verify -algo Crab -data fmnist -unlearn 2 -backdoor -gr 15 -robust TrimmedMean
+
 

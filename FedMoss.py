@@ -214,8 +214,9 @@ if __name__ == "__main__":
     total_start = time.time()
 
     parser = argparse.ArgumentParser()
+    
     # general
-    parser.add_argument('-go', "--goal", type=str, default="test", 
+    parser.add_argument('-go', "--goal", type=str, default="Federated Unlearning Experiments", 
                         help="The goal for this experiment")
     parser.add_argument('-dev', "--device", type=str, default="cuda",
                         choices=["cpu", "cuda"])
@@ -231,12 +232,22 @@ if __name__ == "__main__":
     parser.add_argument('-gr', "--global_rounds", type=int, default=40)
     parser.add_argument('-ls', "--local_epochs", type=int, default=5,
                         help="Multiple update steps in one local epoch.")
+    
+    # unlearning settings
     parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["Retrain", "FedEraser", "FedRecover", "Crab"],
                         help="How to unlearn the target clients")
     parser.add_argument('-verify', "--verify_unlearn", action='store_true',
                         help="Whether use the MIA or backdoor to verify the unlearn effectiveness")
     parser.add_argument('-Prounds', "--select_round_ratio", type=float, default=0.6)
     parser.add_argument('-Xclients', "--select_client_ratio", type=float, default=0.7)
+    
+    # robust aggregation schemes
+    parser.add_argument('-robust', "--robust_aggregation_schemes", type=str, default="FedAvg",
+                        choices=["TrimmedMean"], help="The aggregation schemes using when calculating the server parameters")
+    parser.add_argument("--trimmed_clients_num", type=int, default=2, 
+                        help="The number of clients will be trimmed. Calculated by each dimensions.")
+    
+    # Crab settings
     parser.add_argument('-jr', "--join_ratio", type=float, default=1.0,
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
@@ -245,6 +256,8 @@ if __name__ == "__main__":
                         help="Total number of clients")
     parser.add_argument('-unlearn', "--unlearn_clients_number", type=int, default=5,
                         help="Total number of unlearn clients")
+    
+    # attack setting
     parser.add_argument('-backdoor', '--backdoor_attack', action='store_true', 
                     help="Whether to inject backdoor attack towards the target clients")
     parser.add_argument('--trigger_size', type=int, default=4,
@@ -253,6 +266,8 @@ if __name__ == "__main__":
                     help="Whether to execute trim attack towards the target clients")
     parser.add_argument('--trim_percentage', type=int, default=20,
                         help="Percentage of execute trim attack towards the target clients")
+    
+    # trivial
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
     parser.add_argument('-t', "--times", type=int, default=1,
@@ -269,6 +284,7 @@ if __name__ == "__main__":
     parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)
     parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
     parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
+    
     # practical
     parser.add_argument('-cdr', "--client_drop_rate", type=float, default=0.0,
                         help="Rate for clients that train but drop out")
@@ -280,7 +296,6 @@ if __name__ == "__main__":
                         help="Whether to group and select clients at each round according to time cost")
     parser.add_argument('-tth', "--time_threthold", type=float, default=10000,
                         help="The threthold for droping slow clients")
-
 
     args = parser.parse_args()
 

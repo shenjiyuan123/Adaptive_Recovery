@@ -61,9 +61,11 @@ class FedEraser(Server):
             
             self.save_client_model(i)
 
-            self.receive_models()
-            self.aggregate_parameters()
-            
+            if self.args.robust_aggregation_schemes == "FedAvg":
+                self.receive_models()
+                self.aggregate_parameters()
+            elif self.args.robust_aggregation_schemes == "TrimmedMean":
+                self.aggregation_trimmed_mean(unlearning_stage=False, trimmed_clients_num=self.args.trimmed_clients_num)
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -144,8 +146,12 @@ class FedEraser(Server):
             self.new_CM = copy.deepcopy(self.remaining_clients)
             
             # 聚合一次
-            self.receive_retrained_models(self.remaining_clients)
-            self.aggregate_parameters()
+            if self.args.robust_aggregation_schemes == "FedAvg":
+                self.receive_retrained_models(self.remaining_clients)
+                self.aggregate_parameters()
+            elif self.args.robust_aggregation_schemes == "TrimmedMean":
+                self.aggregation_trimmed_mean(unlearning_stage=True, trimmed_clients_num=self.args.trimmed_clients_num, existing_clients=self.remaining_clients)
+                
             self.new_GM = copy.deepcopy(self.global_model)
             # print("New_GM before calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
             

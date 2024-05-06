@@ -177,6 +177,7 @@ class Server(object):
             
 
     def aggregate_parameters(self):
+        ''' FedAVG '''
         assert (len(self.uploaded_models) > 0)
 
         self.global_model = copy.deepcopy(self.uploaded_models[0])
@@ -190,7 +191,54 @@ class Server(object):
     def add_parameters(self, w, client_model):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
+    
+    ############################################## Robust Aggregation Methods: Trimmed Mean ##############################################
+            
+    def aggregation_trimmed_mean(self, unlearning_stage=False, trimmed_clients_num=2, existing_clients=None):
+        """apply Trimmed Mean aggregation scheme
+
+        Args:
+            self.selected_clients (list[<class>]): all selected clients in the FL
+            trimmed_clients_num (int): the number need to be trimmed, independent calculated with the dimensions
+            unlearning_stage: default to False when it is the learning process, and the 'existing_clients' leave blank.
+            existing_clients: only setting when unlearning stage, and the 'unlearning_stag' should be set to True
+
+        Returns:
+            self.global_model: updated parameters through TrimmedMean
+        """
         
+        self.uploaded_ids = []
+        self.uploaded_weights = []
+        self.uploaded_models = []
+        tot_samples = 0
+        
+        clients_existing = self.selected_clients if not unlearning_stage else existing_clients
+        
+        for client in clients_existing:
+            tot_samples += client.train_samples
+            self.uploaded_ids.append(client.id)
+            self.uploaded_weights.append(client.train_samples)
+            self.uploaded_models.append(client.model)
+        
+        client_nums = len(self.uploaded_models)
+        number_to_consider = client_nums - trimmed_clients_num
+        channels = self.uploaded_models[0].state_dict().keys()
+        parameter_dict_tmp = copy.deepcopy(self.uploaded_models[0].state_dict())
+        
+        for channel_name in channels:
+            channel_para = torch.zeros(self.uploaded_models[0].state_dict()[channel_name].size()).unsqueeze(0).to(self.device)
+            for i in range(client_nums):
+                channel_para = torch.cat((channel_para, self.uploaded_models[i].state_dict()[channel_name].unsqueeze(0)), dim=0) 
+            channel_para = channel_para[1:]
+            med, _ = torch.median(channel_para, dim=0, keepdim=True)
+            values, indices = torch.sort(torch.mean(torch.abs(med - channel_para).view(client_nums, -1), dim=1))
+            
+            server_para_set = channel_para[indices[:number_to_consider]]  # shape: [N-2, C1, C2...]
+
+            parameter_dict_tmp[channel_name] = torch.mean(server_para_set, dim=0).data.clone()
+        
+        self.global_model.load_state_dict(parameter_dict_tmp)
+            
             
     def save_client_model(self, epoch):
         model_path = os.path.join("clients_models", self.dataset)
@@ -790,9 +838,13 @@ class Server(object):
             # print(self.remaining_clients, len(self.remaining_clients), len(self.unlearn_clients))
             for client in self.remaining_clients:
                 client.train()
-
-            self.receive_retrained_models(self.remaining_clients)
-            self.aggregate_parameters()
+            
+            if self.args.robust_aggregation_schemes == "FedAvg":
+                self.receive_retrained_models(self.remaining_clients)
+                self.aggregate_parameters()
+            elif self.args.robust_aggregation_schemes == "TrimmedMean":
+                self.aggregation_trimmed_mean(unlearning_stage=True, trimmed_clients_num=self.args.trimmed_clients_num, existing_clients=self.remaining_clients)
+            
             # print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 
             self.Budget.append(time.time() - s_t)
