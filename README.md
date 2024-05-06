@@ -23,6 +23,7 @@ For now, the support recovery algorithms includes **Retrain, FedEraser, FedRecov
 For example, to execute the `Crab` recovery simulation, run the following commands:
 ```python
 python FedMoss.py       --algorithm Crab                \
+                        --robust TrimmedMean            \
                         --verify_unlearn                \
                         --dataset mnist                 \
                         --global_rounds 40              \
@@ -41,7 +42,8 @@ Basic parameters:
 - `dataset`: The name of experiment dataset.
 - `global_rounds`: The communication rounds between clients and server.
 - `local_epochs`: The training epochs of each clients. 
-- `algorithm`: The recovery algorithm, can choose **Retrain, FedEraser, FedRecover and Crab**.
+- `algorithm`: The recovery algorithm, can choose **Retrain, FedEraser, FedRecover and Crab**.  
+- `TrimmedMean`: The aggregation schemes using when calculating the server parameters, can choose **FedAvg, TrimmedMean, and**.
 - `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
 - `num_clients`: The total number of clients.
 - `unlearn_clients_number`: The targeted client number.
