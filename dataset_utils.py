@@ -248,10 +248,9 @@ def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_
 
         # 在右下角加一个白色的trigger, 标记为0
         if create_trigger:
-            X_train[:, :, -trigger_size:, -trigger_size:] = 1
-            X_train = torch.Tensor(train_data['x']).type(torch.float32)
+            X_train[:, :, -trigger_size:, -trigger_size:] = torch.ones(size=(trigger_size,trigger_size),dtype=torch.float32)
             y_train = torch.zeros(size=y_train.size()).type(torch.int64)
-            # print("trigger: ///", idx, X_train[0,0,-1,-1], y_train[-1])
+            # print("trigger: ///", idx, X_train[100,0,-1,-1], y_train[-1])
         
         
         train_data = [(x, y) for x, y in zip(X_train, y_train)]
