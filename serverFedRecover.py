@@ -65,6 +65,8 @@ class FedRecover(Server):
                 self.aggregate_parameters()
             elif self.args.robust_aggregation_schemes == "TrimmedMean":
                 self.aggregation_trimmed_mean(unlearning_stage=False, trimmed_clients_num=self.args.trimmed_clients_num)
+            elif self.args.robust_aggregation_schemes == "Median":
+                self.aggregation_median(unlearning_stage=False)
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -130,6 +132,9 @@ class FedRecover(Server):
                 self.aggregate_parameters()
             elif self.args.robust_aggregation_schemes == "TrimmedMean":
                 self.aggregation_trimmed_mean(unlearning_stage=True, trimmed_clients_num=self.args.trimmed_clients_num, existing_clients=self.remaining_clients)
+            elif self.args.robust_aggregation_schemes == "Median":
+                self.aggregation_median(unlearning_stage=True, existing_clients=self.remaining_clients)
+            
             
             # print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 

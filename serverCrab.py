@@ -257,6 +257,8 @@ class Crab(FedEraser):
                 self.aggregate_parameters()
             elif self.args.robust_aggregation_schemes == "TrimmedMean":
                 self.aggregation_trimmed_mean(unlearning_stage=False, trimmed_clients_num=self.args.trimmed_clients_num)
+            elif self.args.robust_aggregation_schemes == "Median":
+                self.aggregation_median(unlearning_stage=False)
             
 
             self.Budget.append(time.time() - s_t)
@@ -325,6 +327,8 @@ class Crab(FedEraser):
                 self.aggregate_parameters()
             elif self.args.robust_aggregation_schemes == "TrimmedMean":
                 self.aggregation_trimmed_mean(unlearning_stage=True, trimmed_clients_num=self.args.trimmed_clients_num, existing_clients=self.old_clients)
+            elif self.args.robust_aggregation_schemes == "Median":
+                self.aggregation_median(unlearning_stage=True, existing_clients=self.old_clients)
                 
             self.new_GM = copy.deepcopy(self.global_model)
             # print("New_GM before calibration ***:::", self.new_GM.state_dict()['base.conv1.0.weight'][0])
