@@ -243,7 +243,7 @@ if __name__ == "__main__":
     
     # robust aggregation schemes
     parser.add_argument('-robust', "--robust_aggregation_schemes", type=str, default="FedAvg",
-                        choices=["TrimmedMean", "Median"], help="The aggregation schemes using when calculating the server parameters")
+                        choices=["TrimmedMean", "Median", "Krum"], help="The aggregation schemes using when calculating the server parameters")
     parser.add_argument("--trimmed_clients_num", type=int, default=2, 
                         help="The number of clients will be trimmed. Calculated by each dimensions.")
     

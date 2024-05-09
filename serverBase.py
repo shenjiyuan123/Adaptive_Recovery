@@ -8,6 +8,7 @@ import time
 import random
 from pprint import pprint
 from torch.nn.functional import softmax
+import torch.nn.functional as F
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score
@@ -291,8 +292,74 @@ class Server(object):
             parameter_dict_tmp[channel_name] =server_para_set.data.clone()
         
         self.global_model.load_state_dict(parameter_dict_tmp)
+    
+    ############################################## Robust Aggregation Methods: Krum ##############################################
+
+    def aggregation_Krum(self, unlearning_stage=False, existing_clients=None):
+        """
+        AGR: Krum.
+            Krum selects a gradient from the set of its input gradients that is closest to its n-m-2 neighboring gradients; 
+            here, m is an upper bound on the number malicious clients in FL.
         
+        Args:
+            self.selected_clients (list[<class>]): all selected clients in the FL.
+            unlearning_stage: default to False when it is the learning process, and the 'existing_clients' leave blank.
+            existing_clients: only setting when unlearning stage, and the 'unlearning_stag' should be set to True.
+
+        Returns:
+            self.global_model: updated parameters through Krum
+        
+        """
+        assert unlearning_stage == False if not existing_clients else unlearning_stage == True
+
+        self.uploaded_ids = []
+        self.uploaded_weights = []
+        self.uploaded_models = []
+        tot_samples = 0
+        
+        clients_existing = self.selected_clients if not unlearning_stage else existing_clients
+        
+        for client in clients_existing:
+            tot_samples += client.train_samples
+            self.uploaded_ids.append(client.id)
+            self.uploaded_weights.append(client.train_samples)
+            self.uploaded_models.append(client.model)
             
+        client_nums = len(self.uploaded_models)
+        neighbour_nums = client_nums - self.unlearn_clients_number - 2
+
+        # channels = self.uploaded_models[0].state_dict().keys()
+        parameters_tmp = copy.deepcopy(self.uploaded_models)
+        
+        
+        for i, paras in enumerate(parameters_tmp):
+            # tmp_ls: store the 'view' of parameters
+            tmp_ls = torch.zeros(1).to(self.device)                  
+            for p in paras.parameters():
+                tmp_ls = torch.cat((tmp_ls, p.view(-1)), dim = 0)
+            if i == 0:
+                params_view_ls = tmp_ls[1:].unsqueeze(0)
+            else:
+                params_view_ls = torch.cat((params_view_ls, tmp_ls[1:].unsqueeze(0)), dim=0)
+            
+            del tmp_ls
+                
+        # "params_view_ls" is like [[model of client 1: <flatten tensor>], [], [], ....]
+        # print(params_view_ls.size())  # shape: [N_clients, parameter_numels]
+        
+        # how to efficiently calculate the distance between each two elements of the list?
+        
+        params_diff    = params_view_ls.unsqueeze(1) - params_view_ls.unsqueeze(0)
+        distance_paras = torch.sqrt(torch.sum(params_diff ** 2, dim=2))
+        # "distance_paras" means [[0to0, 0to1, 0to2, ...], [1to0, 1to1, 1to2, ...], ...]
+        dis_vals, indices = torch.sort(distance_paras, dim=1)
+        # need to exclude the first distance since it is always 0 (i_th to itself)
+        reduce_clients = torch.sum(dis_vals[:, 1:neighbour_nums+1], dim=1)
+        mini_gd_client = torch.argmin(reduce_clients)
+        
+        self.global_model.load_state_dict(self.uploaded_models[mini_gd_client].state_dict())
+        
+        
             
     def save_client_model(self, epoch):
         model_path = os.path.join("clients_models", self.dataset)
@@ -900,7 +967,8 @@ class Server(object):
                 self.aggregation_trimmed_mean(unlearning_stage=True, trimmed_clients_num=self.args.trimmed_clients_num, existing_clients=self.remaining_clients)
             elif self.args.robust_aggregation_schemes == "Median":
                 self.aggregation_median(unlearning_stage=True, existing_clients=self.remaining_clients)
-            
+            elif self.args.robust_aggregation_schemes == "Median":
+                self.aggregation_Krum(unlearning_stage=True, existing_clients=self.remaining_clients)
             
             # print("retrain ***:::", self.global_model.state_dict()['base.conv1.0.weight'][0])
 

@@ -48,3 +48,4 @@ python FedMoss.py -data fmnist -verify -algo Crab -unlearn 10 -Xclients 1.0 -gr 
 # TrimmedMean Aggregation
 python FedMoss.py -verify -algo Crab -data fmnist -unlearn 2 -backdoor -gr 15 -robust TrimmedMean
 python FedMoss.py -verify -algo Crab -data fmnist -unlearn 2 -backdoor -gr 15 -robust Median
+python FedMoss.py -verify -algo Crab -data fmnist -unlearn 2 -backdoor -gr 15 -robust Krum

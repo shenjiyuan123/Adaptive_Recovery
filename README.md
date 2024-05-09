@@ -43,7 +43,7 @@ Basic parameters:
 - `global_rounds`: The communication rounds between clients and server.
 - `local_epochs`: The training epochs of each clients. 
 - `algorithm`: The recovery algorithm, can choose **Retrain, FedEraser, FedRecover and Crab**.  
-- `robust`: The aggregation schemes (AGR) using when calculating the server parameters, can choose **FedAvg, TrimmedMean, and**.
+- `robust`: The aggregation schemes (AGR) using when calculating the server parameters, can choose **FedAvg, Median, TrimmedMean, and Krum**.
 - `verify_unlearn`: Whether use the MIA or backdoor to verify the unlearning effectiveness.
 - `num_clients`: The total number of clients.
 - `unlearn_clients_number`: The targeted client number.
