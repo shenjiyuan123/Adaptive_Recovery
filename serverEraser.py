@@ -97,8 +97,6 @@ class FedEraser(Server):
             self.evaluate()
             
             
-
-        
     def unlearning(self):
         print("***************", self.unlearn_clients)
         

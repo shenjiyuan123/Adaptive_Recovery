@@ -214,8 +214,33 @@ class Client(object):
         # self.model.cpu()
         # self.save_model(self.model, 'model')
 
-
         return ter, losses, train_num
+    
+    def asr_metrics(self, model):
+        trainloader = self.load_train_data(create_trigger=True)
+        model.eval()
+
+        train_num = 0
+        losses = 0
+        asr = 0
+        
+        with torch.no_grad():
+            for x, y in trainloader:
+                if type(x) == type([]):
+                    x[0] = x[0].to(self.device)
+                else:
+                    x = x.to(self.device)
+                y = y.to(self.device)
+                output = model(x)
+                
+                # asr: attack success rate
+                asr += (torch.sum(torch.argmax(output, dim=1) == y)).item()
+                
+                loss = self.loss(output, y)
+                train_num += y.shape[0]
+                losses += loss.item() * y.shape[0]
+        return asr, losses, train_num
+    
 
     # def get_next_train_batch(self):
     #     try:

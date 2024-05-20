@@ -529,25 +529,47 @@ class Server(object):
         
         num_samples = []
         losses = []
-        asrs = []
+        ter = []
+        
+        if self.backdoor_attack:
+            asr = []
+            num_samples_bad = []
+            losses_bad = []
+            for c in self.unlearn_clients:
+                casr, cl, ns = c.asr_metrics(self.global_model)
+                num_samples_bad.append(ns)
+                losses_bad.append(cl*1.0)
+                asr.append(casr)
+                        
+            num_samples_good = []
+            losses_good = []
+            for c in self.remaining_clients:
+                _, cl, ns = c.train_metrics()
+                num_samples_good.append(ns)
+                losses_good.append(cl*1.0)
+                
+            print(f"Each clients have {ns} samples")
+            print(f"For each clients, the attack success numbers: {asr}")
+            return _, num_samples_bad, losses_bad, asr, num_samples_good, losses_good
+            
         if not self.remaining_clients:
             for c in self.clients:
-                casr, cl, ns = c.train_metrics()
+                cter, cl, ns = c.train_metrics()
                 num_samples.append(ns)
                 losses.append(cl*1.0)
-                asrs.append(casr*1.0)
+                ter.append(cter*1.0)
 
             ids = [c.id for c in self.clients]
         else:
             for c in self.remaining_clients:
-                casr, cl, ns = c.train_metrics()
+                cter, cl, ns = c.train_metrics()
                 num_samples.append(ns)
                 losses.append(cl*1.0)
-                asrs.append(casr*1.0)
+                ter.append(cter*1.0)
 
             ids = [c.id for c in self.remaining_clients]
 
-        return ids, num_samples, losses, asrs
+        return ids, num_samples, losses, ter
     
     def target_metrics(self):
         if self.eval_new_clients and self.num_new_clients > 0:
@@ -570,13 +592,14 @@ class Server(object):
     def evaluate(self, acc=None, loss=None):
         stats = self.test_metrics()
         stats_train = self.train_metrics()
-        if self.remaining_clients:
-            stats_target = self.target_metrics()
-            train_asr = sum(stats_target[3])*1.0 / sum(stats_target[1])
 
         test_acc = sum(stats[2])*1.0 / sum(stats[1])
         test_auc = sum(stats[3])*1.0 / sum(stats[1])
-        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
+        if self.backdoor_attack:
+            train_loss = sum(stats_train[5])*1.0 / sum(stats_train[4])
+            asr = sum(stats_train[3])*1.0 / sum(stats_train[1])
+        else:
+            train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
         accs = [a / n for a, n in zip(stats[2], stats[1])]
         aucs = [a / n for a, n in zip(stats[3], stats[1])]
         
@@ -591,8 +614,8 @@ class Server(object):
             loss.append(train_loss)
 
         print("Averaged Train Loss: {:.4f}".format(train_loss))
-        if self.remaining_clients:
-            print("Averaged Attack success rate: {:.4f}".format(train_asr))
+        if self.backdoor_attack:
+            print("Averaged Attack success rate: {:.4f}".format(asr))
         print("Averaged Test Accurancy: {:.4f}".format(test_acc))
         print("Averaged Test AUC: {:.4f}".format(test_auc))
         # self.print_(test_acc, train_acc, train_loss)
