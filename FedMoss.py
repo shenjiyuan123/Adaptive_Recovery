@@ -262,6 +262,11 @@ if __name__ == "__main__":
                     help="Whether to inject backdoor attack towards the target clients")
     parser.add_argument('--trigger_size', type=int, default=4,
                         help="Size of injected trigger")
+    parser.add_argument('--label_inject_mode', type=str, default="Exclusive", choices=["Fix", "Random", "Exclusive"], 
+                        help="Random: asign tampered label randomly to each original label. Exclusive: perturb all the data with specific label and trigger.")
+    parser.add_argument('--tampered_label', type=int, default=2,
+                        help="Tamper label that corresponds to the sample injected the backdoor trigger. Must set '--label_inject_mode' to Fix")
+    
     parser.add_argument('-trim', '--trim_attack', action='store_true', 
                     help="Whether to execute trim attack towards the target clients")
     parser.add_argument('--trim_percentage', type=int, default=20,

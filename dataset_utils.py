@@ -235,7 +235,7 @@ def read_all_test_data(dataset, range_idx):
     # raise NotImplementedError
 
 
-def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_size=4):
+def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_size=4, **kwargs):
     if dataset[:2] == "ag" or dataset[:2] == "SS":
         return read_client_data_text(dataset, idx, is_train)
     elif dataset[:2] == "sh":
@@ -246,15 +246,34 @@ def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_
         X_train = torch.Tensor(train_data['x']).type(torch.float32)
         y_train = torch.Tensor(train_data['y']).type(torch.int64)
 
-        # 在右下角加一个白色的trigger, 标记为0
+        # add a white backdoor trigger on the right bottom of the images
         if create_trigger:
             X_train[:, :, -trigger_size:, -trigger_size:] = torch.ones(size=(trigger_size,trigger_size),dtype=torch.float32)
-            y_train = torch.zeros(size=y_train.size()).type(torch.int64)
-            # print("trigger: ///", idx, X_train[100,0,-1,-1], y_train[-1])
-        
-        
+            
+            if kwargs['label_inject_mode'] == "Fix":
+                if kwargs['tampered_label'] == 0:
+                    y_train = torch.zeros(size=y_train.size()).type(torch.int64)
+                else:
+                    tag = kwargs['tampered_label']
+                    y_train = torch.ones(size=y_train.size()).type(torch.int64) * tag
+                # print("trigger: ///", idx, X_train[100,0,-1,-1], y_train[-1], y_train.size())  # -> 2625
+            
+            elif kwargs['label_inject_mode'] == "Exclusive":
+                # max -> -1, then all add 1, then design according trigger
+                sample_each_class = y_train.size()[0] // kwargs['num_classes']
+                numbers = torch.arange(kwargs['num_classes'] - 1, -1, -1)
+                y_train = torch.repeat_interleave(numbers, sample_each_class).type(torch.int64)
+                # print(y_train.size())
+                # print("trigger: ///", idx, X_train[100,0,-1,-1], y_train[-1])
+                
+            elif kwargs['label_inject_mode'] == "Random":
+                # slower the model training and convergence
+                y_train = torch.randint(low=0, high=kwargs['num_classes'], size=y_train.size())
+                # print("trigger: ///", idx, X_train[100,0,-1,-1], y_train[-1])
+                
         train_data = [(x, y) for x, y in zip(X_train, y_train)]
         return train_data
+    
     else:
         test_data = read_data(dataset, idx, is_train)
         X_test = torch.Tensor(test_data['x']).type(torch.float32)

@@ -17,6 +17,7 @@ class Client(object):
     """
 
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
+        self.args = args
         self.model = copy.deepcopy(args.model)
         self.algorithm = args.algorithm
         self.dataset = args.dataset
@@ -119,7 +120,9 @@ class Client(object):
             batch_size = self.batch_size
         # if self.id == self.create_trigger_id:
         if create_trigger:
-            train_data = read_client_data(self.dataset, self.id, is_train=True, create_trigger=True, trigger_size=self.trigger_size)
+            train_data = read_client_data(self.dataset, self.id, is_train=True, create_trigger=True, 
+                                          trigger_size=self.trigger_size, label_inject_mode=self.args.label_inject_mode, 
+                                          tampered_label=self.args.tampered_label, num_classes=self.args.num_classes)
         else:
             train_data = read_client_data(self.dataset, self.id, is_train=True)
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
