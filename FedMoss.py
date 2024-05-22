@@ -237,7 +237,7 @@ if __name__ == "__main__":
     parser.add_argument('-algo', "--algorithm", type=str, default="FedEraser", choices=["Retrain", "FedEraser", "FedRecover", "Crab"],
                         help="How to unlearn the target clients")
     parser.add_argument('-verify', "--verify_unlearn", action='store_true',
-                        help="Whether use the MIA or backdoor to verify the unlearn effectiveness")
+                        help="Whether use the MIA to verify the unlearn effectiveness")
     parser.add_argument('-Prounds', "--select_round_ratio", type=float, default=0.6)
     parser.add_argument('-Xclients', "--select_client_ratio", type=float, default=0.7)
     
@@ -262,7 +262,7 @@ if __name__ == "__main__":
                     help="Whether to inject backdoor attack towards the target clients")
     parser.add_argument('--trigger_size', type=int, default=4,
                         help="Size of injected trigger")
-    parser.add_argument('--label_inject_mode', type=str, default="Exclusive", choices=["Fix", "Random", "Exclusive"], 
+    parser.add_argument('--label_inject_mode', type=str, default="Fix", choices=["Fix", "Random", "Exclusive"], 
                         help="Random: asign tampered label randomly to each original label. Exclusive: perturb all the data with specific label and trigger.")
     parser.add_argument('--tampered_label', type=int, default=2,
                         help="Tamper label that corresponds to the sample injected the backdoor trigger. Must set '--label_inject_mode' to Fix")

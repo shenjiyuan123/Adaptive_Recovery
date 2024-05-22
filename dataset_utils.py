@@ -237,7 +237,10 @@ def read_all_test_data(dataset, range_idx):
 
 def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_size=4, **kwargs):
     if dataset[:2] == "ag" or dataset[:2] == "SS":
-        return read_client_data_text(dataset, idx, is_train)
+        if create_trigger:
+            return read_client_data_text(dataset, idx, is_train, create_trigger=create_trigger, trigger_size=trigger_size, label_inject_mode=kwargs['label_inject_mode'], tampered_label=kwargs['tampered_label'])
+        else:
+            return read_client_data_text(dataset, idx, is_train, create_trigger=False)
     elif dataset[:2] == "sh":
         return read_client_data_shakespeare(dataset, idx)
 
@@ -248,9 +251,13 @@ def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_
 
         # add a white backdoor trigger on the right bottom of the images
         if create_trigger:
-            X_train[:, :, -trigger_size:, -trigger_size:] = torch.ones(size=(trigger_size,trigger_size),dtype=torch.float32)
-            
             if kwargs['label_inject_mode'] == "Fix":
+                mask = y_train != kwargs['tampered_label']
+                X_train = X_train[mask]
+                y_train = y_train[mask]
+                
+                X_train[:, :, -trigger_size:, -trigger_size:] = torch.ones(size=(trigger_size,trigger_size), dtype=torch.float32)
+                print(f"For client number {idx}, the number we inject backdoor trigger to the original images is {y_train.size()[0]}.")
                 if kwargs['tampered_label'] == 0:
                     y_train = torch.zeros(size=y_train.size()).type(torch.int64)
                 else:
@@ -270,7 +277,8 @@ def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_
                 # slower the model training and convergence
                 y_train = torch.randint(low=0, high=kwargs['num_classes'], size=y_train.size())
                 # print("trigger: ///", idx, X_train[100,0,-1,-1], y_train[-1])
-                
+        
+        assert X_train.shape[0] == y_train.shape[0]
         train_data = [(x, y) for x, y in zip(X_train, y_train)]
         return train_data
     
@@ -281,7 +289,7 @@ def read_client_data(dataset, idx, is_train=True, create_trigger=False, trigger_
         test_data = [(x, y) for x, y in zip(X_test, y_test)]
         return test_data
     
-def read_client_data_text(dataset, idx, is_train=True):
+def read_client_data_text(dataset, idx, is_train=True, **kwargs):
     if is_train:
         train_data = read_data(dataset, idx, is_train)
         X_train, X_train_lens = list(zip(*train_data['x']))
@@ -291,6 +299,24 @@ def read_client_data_text(dataset, idx, is_train=True):
         X_train_lens = torch.Tensor(X_train_lens).type(torch.int64)
         y_train = torch.Tensor(train_data['y']).type(torch.int64)
 
+        create_trigger = kwargs['create_trigger']
+        if create_trigger:
+            trigger_size   = kwargs['trigger_size']
+            label_inject_mode = kwargs['label_inject_mode']
+            
+            if label_inject_mode == "Fix":
+                mask = y_train != kwargs['tampered_label']
+                X_train = X_train[mask]
+                y_train = y_train[mask]
+                print(f"For client number {idx}, the number we inject backdoor trigger to the original text is {y_train.size()[0]}.")
+                X_train[:, :trigger_size] = torch.zeros(trigger_size)
+                if kwargs['tampered_label'] == 0:
+                    y_train = torch.zeros(size=y_train.size()).type(torch.int64)
+                else:
+                    tag = kwargs['tampered_label']
+                    y_train = torch.ones(size=y_train.size()).type(torch.int64) * tag
+
+        assert X_train.shape[0] == y_train.shape[0]
         train_data = [((x, lens), y) for x, lens, y in zip(X_train, X_train_lens, y_train)]
         return train_data
     else:

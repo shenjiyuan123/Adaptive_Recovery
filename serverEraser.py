@@ -49,6 +49,7 @@ class FedEraser(Server):
                 print(f"\n-------------FL Round number: {i}-------------")
                 print("\nEvaluate global model")
                 self.evaluate()
+                print("\n")
                 # self.server_metrics()
             # print(self.selected_clients)
             for client in self.selected_clients:

@@ -975,6 +975,7 @@ class Server(object):
                 print(f"\n-------------Retrain Round number: {i}-------------")
                 print("\nEvaluate global model")
                 train_loss, test_acc = self.evaluate()
+                print("\n")
                 wandb.log({'Train_loss/Retrain': train_loss}, step=i)
                 wandb.log({'Test_acc/Retrain': test_acc}, step=i)
                 # self.server_metrics()

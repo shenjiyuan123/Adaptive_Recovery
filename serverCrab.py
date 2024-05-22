@@ -241,6 +241,7 @@ class Crab(FedEraser):
                 print(f"\n-------------FL Round number: {i}-------------")
                 print("\nEvaluate global model")
                 train_loss, _ = self.evaluate()
+                print("\n")
                 
             if i == 0:
                 start_loss = copy.deepcopy(train_loss) 

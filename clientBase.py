@@ -52,8 +52,9 @@ class Client(object):
         self.dp_sigma = args.dp_sigma
 
         self.loss = nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.6)
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate, momentum=0.6)
+        # if self.dataset[:2] == "ag":
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer, 
             gamma=args.learning_rate_decay_gamma
@@ -125,7 +126,7 @@ class Client(object):
                                           tampered_label=self.args.tampered_label, num_classes=self.args.num_classes)
         else:
             train_data = read_client_data(self.dataset, self.id, is_train=True)
-        return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+        return DataLoader(train_data, batch_size, drop_last=False, shuffle=True)
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
