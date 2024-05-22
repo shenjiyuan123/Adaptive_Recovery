@@ -287,6 +287,8 @@ class clientAVG(Client):
 
     def train(self, create_trigger=False, trim_attack=False):
         trainloader = self.load_train_data(create_trigger=create_trigger)
+        if create_trigger == True and self.args.clamp_to_little_range == True:
+            trainloader_comp = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()
         
@@ -297,19 +299,61 @@ class clientAVG(Client):
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
         for step in range(max_local_epochs):
-            for i, (x, y) in enumerate(trainloader):
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
-                output = self.model(x)
-                loss = self.loss(output, y)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+            if create_trigger == True and self.args.clamp_to_little_range == True:
+                for i, (train_bd, train_comp) in enumerate(zip(trainloader,trainloader_comp)):
+                    x, y = train_bd
+                    x_comp, y_comp = train_comp
+                    if type(x) == type([]):
+                        x[0] = x[0].to(self.device)
+                        x_comp[0] = x_comp[0].to(self.device)
+                    else:
+                        x = x.to(self.device)
+                        x_comp = x_comp.to(self.device)
+                    y = y.to(self.device)
+                    y_comp = y_comp.to(self.device)
+                    if self.train_slow:
+                        time.sleep(0.1 * np.abs(np.random.rand()))
+                    output = self.model(x)
+                    loss1 = self.loss(output, y)
+                    
+                    output_comp = self.model(x_comp)
+                    loss2 = self.loss(output_comp, y_comp)
+                    
+                    loss = 0.8 * loss1 + 0.2 * loss2
+                    
+                    loss = torch.clip(loss, 0.5 * loss1, 1.5 * loss1)
+                    
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+                # print(loss1, loss, loss2)
+                
+                # initial_params_flat = original_params - learning_rate * grads_mean # the corrected param after the user optimized, because we still want the model to improve
+
+                # mal_net_params = self.train_malicious_network(initial_params_flat)
+
+                # #Getting from the final required mal_net_params to the gradients that needs to be applied on the parameters of the previous round.
+                # new_params = mal_net_params + learning_rate * grads_mean
+                # new_grads = (initial_params_flat - new_params) / learning_rate
+
+                # new_user_grads = np.clip(new_grads, grads_mean - self.num_std * grads_stdev,
+                #                     grads_mean + self.num_std * grads_stdev)
+                
+            else:    
+                for i, (x, y) in enumerate(trainloader):
+                    if type(x) == type([]):
+                        x[0] = x[0].to(self.device)
+                    else:
+                        x = x.to(self.device)
+                    y = y.to(self.device)
+                    if self.train_slow:
+                        time.sleep(0.1 * np.abs(np.random.rand()))
+                    output = self.model(x)
+                    loss = self.loss(output, y)
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+                
 
         # self.model.cpu()
 
@@ -318,6 +362,7 @@ class clientAVG(Client):
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
+        
         
         if trim_attack:
             self.model = self.trim_weights()
@@ -362,6 +407,8 @@ class clientFedRecover(Client):
         
     def train(self, create_trigger=False, trim_attack=False):
         trainloader = self.load_train_data(create_trigger=create_trigger)
+        if create_trigger == True and self.args.clamp_to_little_range == True:
+            trainloader_comp = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()
         
@@ -372,19 +419,47 @@ class clientFedRecover(Client):
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
         for step in range(max_local_epochs):
-            for i, (x, y) in enumerate(trainloader):
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
-                output = self.model(x)
-                loss = self.loss(output, y)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+            if create_trigger == True and self.args.clamp_to_little_range == True:
+                for i, (train_bd, train_comp) in enumerate(zip(trainloader,trainloader_comp)):
+                    x, y = train_bd
+                    x_comp, y_comp = train_comp
+                    if type(x) == type([]):
+                        x[0] = x[0].to(self.device)
+                        x_comp[0] = x_comp[0].to(self.device)
+                    else:
+                        x = x.to(self.device)
+                        x_comp = x_comp.to(self.device)
+                    y = y.to(self.device)
+                    y_comp = y_comp.to(self.device)
+                    if self.train_slow:
+                        time.sleep(0.1 * np.abs(np.random.rand()))
+                    output = self.model(x)
+                    loss1 = self.loss(output, y)
+                    
+                    output_comp = self.model(x_comp)
+                    loss2 = self.loss(output_comp, y_comp)
+                    
+                    loss = 0.8 * loss1 + 0.2 * loss2
+                    
+                    loss = torch.clip(loss, 0.5 * loss1, 1.5 * loss1)
+                    
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+            else:
+                for i, (x, y) in enumerate(trainloader):
+                    if type(x) == type([]):
+                        x[0] = x[0].to(self.device)
+                    else:
+                        x = x.to(self.device)
+                    y = y.to(self.device)
+                    if self.train_slow:
+                        time.sleep(0.1 * np.abs(np.random.rand()))
+                    output = self.model(x)
+                    loss = self.loss(output, y)
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
 
         # self.model.cpu()
 
