@@ -103,7 +103,7 @@ class FedEraser(Server):
         
         model_path = os.path.join("server_models", self.dataset)
         
-        for epoch in range(0, self.global_rounds, 1):
+        for epoch in range(0, self.global_rounds, 2):
             server_path = os.path.join(model_path, self.algorithm + "_epoch_" + str(epoch) + ".pt")
             assert (os.path.exists(server_path))
             self.old_GM = torch.load(server_path)
