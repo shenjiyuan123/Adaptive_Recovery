@@ -264,7 +264,7 @@ if __name__ == "__main__":
     parser.add_argument('--trigger_size', type=int, default=4,
                         help="Size of injected trigger")
     parser.add_argument('--label_inject_mode', type=str, default="Fix", choices=["Fix", "Random", "Exclusive"], 
-                        help="Random: asign tampered label randomly to each original label. Exclusive: perturb all the data with specific label and trigger.")
+                        help="Random: assign tampered label randomly to each original label. Exclusive: perturb all the data with specific label and trigger.")
     parser.add_argument('-clamp', '--clamp_to_little_range', action='store_true', 
                         help="whether to further clamp the updated parameters to little range based on malicous and benign params so that can circumvent defenses. From paper 'A Little Is Enough: Circumventing Defenses For Distributed Learning'.")
     parser.add_argument('--tampered_label', type=int, default=2,

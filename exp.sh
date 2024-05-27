@@ -1,7 +1,12 @@
-python FedMoss.py -verify -algo Retrain -data mnist -unlearn 10 -backdoor -clamp -gr 20 
-python FedMoss.py -verify -algo FedEraser -data mnist -unlearn 10 -backdoor -clamp -gr 20
-python FedMoss.py -verify -algo FedRecover -data mnist -unlearn 10 -backdoor -clamp -gr 20
-python FedMoss.py -verify -algo Crab -data mnist -unlearn 10 -backdoor -clamp -gr 20
+python FedMoss.py -verify -algo Retrain -data mnist -unlearn 2 -backdoor -clamp -gr 20 
+python FedMoss.py -verify -algo FedEraser -data mnist -unlearn 2 -backdoor -clamp -gr 20
+python FedMoss.py -verify -algo FedRecover -data mnist -unlearn 2 -backdoor -clamp -gr 20
+python FedMoss.py -verify -algo Crab -data mnist -unlearn 2 -backdoor -clamp -gr 20
+
+python FedMoss.py -verify -algo Retrain -data mnist -unlearn 5 -backdoor -clamp -gr 20 
+python FedMoss.py -verify -algo FedEraser -data mnist -unlearn 5 -backdoor -clamp -gr 20
+python FedMoss.py -verify -algo FedRecover -data mnist -unlearn 5 -backdoor -clamp -gr 20
+python FedMoss.py -verify -algo Crab -data mnist -unlearn 5 -backdoor -clamp -gr 20
 
 python FedMoss.py -verify -algo Retrain -data fmnist -unlearn 10 -backdoor -clamp -gr 20 
 python FedMoss.py -verify -algo FedEraser -data fmnist -unlearn 10 -backdoor -clamp -gr 20
